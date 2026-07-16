@@ -69,6 +69,8 @@ export function TableView({ schema, onUpdateRow, onDeleteRow, onAddRow, onUpdate
   const [relationOpen, setRelationOpen] = useState<EditCell>(null)
   const [sort, setSort] = useState<SortState>(null)
   const [filter, setFilter] = useState('')
+  const [lockHeaders, setLockHeaders] = useState(true)
+  const [lockFirstColumn, setLockFirstColumn] = useState(false)
   const inputRef = useRef<HTMLInputElement>(null)
 
   useEffect(() => {
@@ -168,19 +170,39 @@ export function TableView({ schema, onUpdateRow, onDeleteRow, onAddRow, onUpdate
           className="px-3 py-1.5 text-sm border border-gray-200 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-100 rounded-md outline-none focus:border-blue-300 focus:ring-1 focus:ring-blue-100 w-52"
         />
         <span className="text-xs text-gray-400 dark:text-gray-500">{sorted.length} row{sorted.length !== 1 ? 's' : ''}</span>
+        <label className="flex items-center gap-1.5 text-xs text-gray-500 dark:text-gray-400 cursor-pointer select-none ml-auto">
+          <input
+            type="checkbox"
+            checked={lockHeaders}
+            onChange={(e) => setLockHeaders(e.target.checked)}
+            className="cursor-pointer accent-blue-500"
+          />
+          Lock headers
+        </label>
+        <label className="flex items-center gap-1.5 text-xs text-gray-500 dark:text-gray-400 cursor-pointer select-none">
+          <input
+            type="checkbox"
+            checked={lockFirstColumn}
+            onChange={(e) => setLockFirstColumn(e.target.checked)}
+            className="cursor-pointer accent-blue-500"
+          />
+          Lock first column
+        </label>
       </div>
 
       {/* Table */}
       <div className="border border-gray-200 dark:border-gray-700 rounded-lg overflow-hidden">
-        <div className="overflow-x-auto">
+        <div className={lockHeaders ? 'max-h-[70vh] overflow-auto' : 'overflow-x-auto'}>
           <table className="w-full border-collapse text-sm">
             <thead>
-              <tr className="bg-[#f7f7f5] dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700">
-                {schema.columns.map((col) => (
+              <tr className={`${lockHeaders ? 'sticky top-0 z-10' : ''} bg-[#f7f7f5] dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700`}>
+                {schema.columns.map((col, i) => (
                   <th
                     key={col.id}
                     style={{ minWidth: col.type === 'checkbox' ? 64 : 160 }}
-                    className="text-left px-3 py-2 font-medium text-gray-600 dark:text-gray-300 border-r border-gray-200 dark:border-gray-700 last:border-r-0 whitespace-nowrap"
+                    className={`text-left px-3 py-2 font-medium text-gray-600 dark:text-gray-300 border-r border-gray-200 dark:border-gray-700 last:border-r-0 whitespace-nowrap ${
+                      lockFirstColumn && i === 0 ? 'sticky left-0 z-20 bg-[#f7f7f5] dark:bg-gray-800' : ''
+                    }`}
                   >
                     <button
                       onClick={() => cycleSort(col.id)}
@@ -209,10 +231,14 @@ export function TableView({ schema, onUpdateRow, onDeleteRow, onAddRow, onUpdate
             <tbody>
               {sorted.map((row) => (
                 <tr key={row.id} className="border-b border-gray-100 dark:border-gray-800 last:border-b-0 hover:bg-[#fafafa] dark:hover:bg-gray-800/50 group">
-                  {schema.columns.map((col) => (
+                  {schema.columns.map((col, i) => (
                     <td
                       key={col.id}
-                      className="px-3 py-2 border-r border-gray-100 dark:border-gray-800 last:border-r-0 cursor-text relative"
+                      className={`px-3 py-2 border-r border-gray-100 dark:border-gray-800 last:border-r-0 cursor-text relative ${
+                        lockFirstColumn && i === 0
+                          ? 'sticky left-0 z-10 bg-white dark:bg-gray-900 group-hover:bg-[#fafafa] dark:group-hover:bg-gray-800/50'
+                          : ''
+                      }`}
                       onClick={() => startEdit(row.id, col)}
                     >
                       {col.type === 'checkbox' ? (
