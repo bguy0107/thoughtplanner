@@ -123,6 +123,15 @@ export async function importRoutes(app: FastifyInstance) {
     }
 
     const entries = zip.getEntries()
+
+    // Guard against zip bombs: a small compressed upload can expand to
+    // gigabytes and exhaust memory during extraction. Cap total uncompressed
+    // size rather than trusting the compressed upload size alone.
+    const MAX_UNCOMPRESSED_BYTES = 500 * 1024 * 1024
+    const totalUncompressed = entries.reduce((sum, e) => sum + e.header.size, 0)
+    if (totalUncompressed > MAX_UNCOMPRESSED_BYTES) {
+      return reply.status(400).send({ error: 'Zip contents too large to import' })
+    }
     const mdFiles = entries.filter((e) => e.entryName.endsWith('.md') && !e.isDirectory)
     const csvFiles = entries.filter((e) => e.entryName.endsWith('.csv') && !e.isDirectory)
 

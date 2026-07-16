@@ -15,6 +15,36 @@ function withUrl(file: DbFile) {
   return { ...file, url: fileUrl(file.storageKey) }
 }
 
+// The MinIO bucket serves objects with public read access so uploaded images
+// can be embedded directly in pages. Any type capable of executing script in
+// a browser (html, svg, xml, js, ...) must never be served with a matching
+// Content-Type + inline disposition, or a stored file becomes stored XSS on
+// the app's own origin. Only a small allowlist of genuinely inert types is
+// served inline; everything else is forced to download as an opaque blob.
+const INLINE_SAFE_TYPES = new Set([
+  'image/png',
+  'image/jpeg',
+  'image/gif',
+  'image/webp',
+  'image/avif',
+  'image/x-icon',
+  'application/pdf',
+])
+
+function sanitizeFilename(name: string): string {
+  return name.replace(/[^\w.\- ]/g, '_')
+}
+
+function uploadMetadata(filename: string, mimetype: string): Record<string, string> {
+  const safe = INLINE_SAFE_TYPES.has(mimetype)
+  return {
+    'Content-Type': safe ? mimetype : 'application/octet-stream',
+    'Content-Disposition': safe
+      ? 'inline'
+      : `attachment; filename="${sanitizeFilename(filename)}"`,
+  }
+}
+
 export async function fileRoutes(app: FastifyInstance) {
   // POST /api/pages/:pageId/files — upload a file attached to a page
   app.post<{ Params: { pageId: string } }>(
@@ -30,8 +60,16 @@ export async function fileRoutes(app: FastifyInstance) {
       const ext = data.filename.split('.').pop() ?? ''
       const storageKey = `${req.params.pageId}/${randomUUID()}.${ext}`
 
-      // size is unknown upfront for streams; content-type is recorded in the db
-      await minio.putObject(BUCKET, storageKey, data.file)
+      // size is unknown upfront for streams; content-type is recorded in the db.
+      // metaData controls what MinIO actually serves the object as — never trust
+      // the upload's declared mimetype for inline rendering (see uploadMetadata).
+      await minio.putObject(
+        BUCKET,
+        storageKey,
+        data.file,
+        undefined,
+        uploadMetadata(data.filename, data.mimetype),
+      )
 
       const stat = await minio.statObject(BUCKET, storageKey)
 

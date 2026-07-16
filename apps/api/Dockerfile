@@ -21,4 +21,5 @@ RUN pnpm install --ignore-scripts --prod
 COPY --from=builder /app/dist ./dist
 COPY --from=builder /app/node_modules/.prisma ./node_modules/.prisma
 COPY prisma ./prisma
+USER node
 CMD ["node", "dist/index.js"]

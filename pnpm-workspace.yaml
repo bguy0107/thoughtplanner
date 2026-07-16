@@ -2,6 +2,12 @@ packages:
   - 'apps/*'
   - 'packages/*'
 
+overrides:
+  # Transitive dev-time dependency of next (via better-auth's peer). Moderate
+  # XSS advisory in CSS stringify output — fixed upstream, force the patched
+  # version until next/better-auth bump their own pin.
+  postcss: '^8.5.10'
+
 allowBuilds:
   '@prisma/client': true
   '@prisma/engines': true

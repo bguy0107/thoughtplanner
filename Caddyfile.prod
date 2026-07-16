@@ -1,0 +1,30 @@
+# VPS production Caddyfile — used only via docker-compose.prod.yml.
+#
+# Caddy only requests a Let's Encrypt certificate for a real domain-name site
+# address; port-only addresses (":3000") are served as plain HTTP and never
+# get TLS. Each block below binds {$DOMAIN} on a distinct port so Caddy issues
+# (and reuses) one cert for the domain across all three, via the HTTP-01
+# challenge on port 80 — make sure DNS for DOMAIN points at this host and port
+# 80/443 are reachable from the internet.
+#
+# Set DOMAIN in your .env to your real domain (not "localhost") before using
+# this file, and update NEXT_PUBLIC_API_URL / NEXT_PUBLIC_APP_URL /
+# MINIO_PUBLIC_URL / CORS_ORIGIN / BETTER_AUTH_URL to the matching
+# https://{$DOMAIN}:<port> values.
+
+{$DOMAIN} {
+  reverse_proxy web:3000
+}
+
+{$DOMAIN}:3001 {
+  reverse_proxy api:3001
+}
+
+{$DOMAIN}:9000 {
+  # Uploaded files are served from here with public read access. Deny MIME
+  # sniffing so a browser can never reinterpret a stored file (whose
+  # Content-Type is already restricted by the API's upload allowlist) as
+  # HTML/SVG and execute script from this origin.
+  header X-Content-Type-Options "nosniff"
+  reverse_proxy minio:9000
+}

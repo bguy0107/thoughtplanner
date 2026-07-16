@@ -3,13 +3,13 @@ services:
     image: postgres:16-alpine
     restart: unless-stopped
     environment:
-      POSTGRES_USER: thoughtplanner
-      POSTGRES_PASSWORD: thoughtplanner
-      POSTGRES_DB: thoughtplanner
+      POSTGRES_USER: ${POSTGRES_USER:-thoughtplanner}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-thoughtplanner}
+      POSTGRES_DB: ${POSTGRES_DB:-thoughtplanner}
     volumes:
       - postgres_data:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U thoughtplanner"]
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-thoughtplanner}"]
       interval: 5s
       timeout: 5s
       retries: 10
@@ -30,8 +30,8 @@ services:
     restart: unless-stopped
     command: server /data --console-address ":9001"
     environment:
-      MINIO_ROOT_USER: thoughtplanner
-      MINIO_ROOT_PASSWORD: thoughtplanner-secret
+      MINIO_ROOT_USER: ${MINIO_ACCESS_KEY:-thoughtplanner}
+      MINIO_ROOT_PASSWORD: ${MINIO_SECRET_KEY:-thoughtplanner-secret}
     volumes:
       - minio_data:/data
     ports:
@@ -50,7 +50,10 @@ services:
     restart: unless-stopped
     env_file: .env
     environment:
-      DATABASE_URL: postgresql://thoughtplanner:thoughtplanner@postgres:5432/thoughtplanner
+      # Derived from the canonical POSTGRES_*/MINIO_* vars above rather than
+      # duplicated as a literal, so rotating a password in .env actually takes
+      # effect everywhere instead of silently overriding it back to defaults.
+      DATABASE_URL: postgresql://${POSTGRES_USER:-thoughtplanner}:${POSTGRES_PASSWORD:-thoughtplanner}@postgres:5432/${POSTGRES_DB:-thoughtplanner}
       REDIS_URL: redis://redis:6379
       MINIO_ENDPOINT: minio
       CI: "true"
@@ -73,7 +76,6 @@ services:
     restart: unless-stopped
     env_file: .env
     environment:
-      NEXT_PUBLIC_API_URL: http://localhost:3001
       CI: "true"
     volumes:
       - ./apps/web:/app

@@ -1,6 +1,7 @@
 import 'dotenv/config'
 import Fastify from 'fastify'
 import cors from '@fastify/cors'
+import rateLimit from '@fastify/rate-limit'
 import multipart from '@fastify/multipart'
 import fastifyWebSocket from '@fastify/websocket'
 import { authRoutes } from './routes/auth.js'
@@ -15,7 +16,21 @@ import { v1Routes } from './routes/v1.js'
 import { importRoutes } from './routes/import.js'
 import { ensureBucket } from './lib/minio.js'
 
+if (
+  process.env.NODE_ENV === 'production' &&
+  (!process.env.BETTER_AUTH_SECRET || process.env.BETTER_AUTH_SECRET.startsWith('change-me'))
+) {
+  throw new Error(
+    'BETTER_AUTH_SECRET is unset or still the placeholder value — set a long random secret before running in production.',
+  )
+}
+
 const app = Fastify({ logger: true })
+
+await app.register(rateLimit, {
+  max: 200,
+  timeWindow: '1 minute',
+})
 
 await app.register(cors, {
   origin: (process.env.CORS_ORIGIN ?? 'http://localhost:3000').split(','),

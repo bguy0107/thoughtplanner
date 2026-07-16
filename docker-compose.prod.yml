@@ -1,17 +1,41 @@
 # Usage: docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d
-# Set DOMAIN in your .env for auto-HTTPS via Let's Encrypt
+#
+# Before running:
+#   - Set DOMAIN in your .env to your real domain (not "localhost") — this
+#     enables actual auto-HTTPS via Let's Encrypt (see Caddyfile.prod).
+#   - Update NEXT_PUBLIC_API_URL, NEXT_PUBLIC_APP_URL, MINIO_PUBLIC_URL,
+#     CORS_ORIGIN and BETTER_AUTH_URL in .env to https://<DOMAIN>[:port] values.
+#   - Set a real BETTER_AUTH_SECRET (the API refuses to start in production
+#     with the placeholder value) and rotate POSTGRES_PASSWORD/MINIO_SECRET_KEY.
 
 services:
   api:
     build:
       target: production
-    volumes: []  # no bind mounts in prod
+    environment:
+      NODE_ENV: production
+    # A plain `volumes: []` here does NOT clear the dev bind mounts from
+    # docker-compose.yml — Compose merges list fields, so an empty override is
+    # a no-op and the host source tree would silently shadow the built image
+    # (dist/ missing, container crashes or runs stale code). `!override` forces
+    # replacement instead of merge.
+    volumes: !override []
 
   web:
     build:
       target: production
-    volumes: []
+      # NEXT_PUBLIC_* vars are inlined into the client bundle at build time,
+      # so they must be passed as build args here — setting them only in the
+      # container's runtime environment has no effect on a production build.
+      args:
+        NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL}
+        NEXT_PUBLIC_APP_URL: ${NEXT_PUBLIC_APP_URL}
+    environment:
+      NODE_ENV: production
+    volumes: !override []
 
   caddy:
     environment:
       DOMAIN: ${DOMAIN:-localhost}
+    volumes:
+      - ./Caddyfile.prod:/etc/caddy/Caddyfile
