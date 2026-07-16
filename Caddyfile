@@ -1,0 +1,14 @@
+# Local development: plain HTTP on specific ports
+# VPS production: set DOMAIN env var and use docker-compose.prod.yml
+
+:3000 {
+  reverse_proxy web:3000
+}
+
+:3001 {
+  reverse_proxy api:3001
+}
+
+:9000 {
+  reverse_proxy minio:9000
+}

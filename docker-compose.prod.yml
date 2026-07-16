@@ -1,0 +1,17 @@
+# Usage: docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d
+# Set DOMAIN in your .env for auto-HTTPS via Let's Encrypt
+
+services:
+  api:
+    build:
+      target: production
+    volumes: []  # no bind mounts in prod
+
+  web:
+    build:
+      target: production
+    volumes: []
+
+  caddy:
+    environment:
+      DOMAIN: ${DOMAIN:-localhost}

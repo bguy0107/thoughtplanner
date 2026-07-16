@@ -1,0 +1,20 @@
+node_modules/
+.next/
+dist/
+.env
+.env.local
+*.local
+.pnpm-store/
+*.tsbuildinfo
+
+# Prisma
+apps/api/prisma/migrations/*.sql
+
+# Docker volumes
+postgres_data/
+redis_data/
+minio_data/
+
+# OS
+.DS_Store
+Thumbs.db

@@ -1,0 +1,158 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ─── Auth (Better Auth managed tables) ────────────────────────────────────────
+
+model User {
+  id            String    @id @default(cuid())
+  name          String
+  email         String    @unique
+  emailVerified Boolean   @default(false)
+  image         String?
+  role          Role      @default(EDITOR)
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  sessions     Session[]
+  accounts     Account[]
+  pagesCreated Page[]    @relation("PageCreatedBy")
+  pagesUpdated Page[]    @relation("PageUpdatedBy")
+  files        File[]
+  apiKeys      ApiKey[]
+}
+
+model Session {
+  id        String   @id @default(cuid())
+  userId    String
+  token     String   @unique
+  expiresAt DateTime
+  ipAddress String?
+  userAgent String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model Account {
+  id                    String    @id @default(cuid())
+  userId                String
+  accountId             String
+  providerId            String
+  accessToken           String?
+  refreshToken          String?
+  idToken               String?
+  accessTokenExpiresAt  DateTime?
+  refreshTokenExpiresAt DateTime?
+  scope                 String?
+  password              String?
+  createdAt             DateTime  @default(now())
+  updatedAt             DateTime  @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model Verification {
+  id         String   @id @default(cuid())
+  identifier String
+  value      String
+  expiresAt  DateTime
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+}
+
+enum Role {
+  ADMIN
+  EDITOR
+  VIEWER
+}
+
+// ─── Core content ─────────────────────────────────────────────────────────────
+
+model Page {
+  id           String   @id @default(cuid())
+  parentPageId String?
+  title        String   @default("Untitled")
+  icon         String?
+  coverImage   String?
+  // Full TipTap JSON document stored as JSONB
+  content      Json?
+  isDatabase   Boolean  @default(false)
+  isArchived   Boolean  @default(false)
+  isPublic     Boolean  @default(false)
+  // Fractional indexing for ordering siblings
+  position     Float    @default(0)
+  createdById  String
+  updatedById  String
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  parent     Page?  @relation("PageChildren", fields: [parentPageId], references: [id])
+  children   Page[] @relation("PageChildren")
+  createdBy  User   @relation("PageCreatedBy", fields: [createdById], references: [id])
+  updatedBy  User   @relation("PageUpdatedBy", fields: [updatedById], references: [id])
+
+  databaseSchema DatabaseSchema?
+  databaseRows   DatabaseRow[]
+  files          File[]
+
+  @@index([parentPageId])
+  @@index([isArchived])
+}
+
+model DatabaseSchema {
+  id      String @id @default(cuid())
+  pageId  String @unique
+  // [{id, name, type: "text"|"number"|"checkbox"|"date"|"select"|"multi_select", options?: string[]}]
+  columns Json
+
+  page Page          @relation(fields: [pageId], references: [id], onDelete: Cascade)
+  rows DatabaseRow[]
+}
+
+model DatabaseRow {
+  id         String @id @default(cuid())
+  pageId     String
+  schemaId   String
+  // {columnId: value}
+  properties Json   @default("{}")
+
+  page   Page           @relation(fields: [pageId], references: [id], onDelete: Cascade)
+  schema DatabaseSchema @relation(fields: [schemaId], references: [id], onDelete: Cascade)
+
+  @@index([pageId])
+}
+
+model ApiKey {
+  id        String    @id @default(cuid())
+  userId    String
+  name      String
+  keyHash   String    @unique
+  prefix    String
+  createdAt DateTime  @default(now())
+  lastUsed  DateTime?
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model File {
+  id         String   @id @default(cuid())
+  pageId     String
+  uploaderId String
+  filename   String
+  mimeType   String
+  size       Int
+  storageKey String   @unique
+  createdAt  DateTime @default(now())
+
+  page     Page @relation(fields: [pageId], references: [id], onDelete: Cascade)
+  uploader User @relation(fields: [uploaderId], references: [id])
+
+  @@index([pageId])
+}

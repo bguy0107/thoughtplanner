@@ -1,0 +1,15 @@
+{
+  "name": "thoughtplanner",
+  "private": true,
+  "scripts": {
+    "dev": "pnpm --parallel --filter './apps/*' run dev",
+    "build": "pnpm --recursive run build",
+    "db:generate": "pnpm --filter api exec prisma generate",
+    "db:push": "pnpm --filter api exec prisma db push",
+    "db:migrate": "pnpm --filter api exec prisma migrate dev",
+    "db:studio": "pnpm --filter api exec prisma studio"
+  },
+  "devDependencies": {
+    "typescript": "^5.7.3"
+  }
+}
