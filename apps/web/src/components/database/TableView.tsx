@@ -69,6 +69,7 @@ export function TableView({ schema, onUpdateRow, onDeleteRow, onAddRow, onUpdate
   const [relationOpen, setRelationOpen] = useState<EditCell>(null)
   const [sort, setSort] = useState<SortState>(null)
   const [filter, setFilter] = useState('')
+  const [columnFilter, setColumnFilter] = useState('')
   const [lockHeaders, setLockHeaders] = useState(true)
   const [lockFirstColumn, setLockFirstColumn] = useState(false)
   const inputRef = useRef<HTMLInputElement>(null)
@@ -78,6 +79,10 @@ export function TableView({ schema, onUpdateRow, onDeleteRow, onAddRow, onUpdate
   }, [editing])
 
   const colMap = new Map(schema.columns.map((c) => [c.id, c]))
+
+  const visibleColumns = schema.columns.filter((col) =>
+    col.name.toLowerCase().includes(columnFilter.toLowerCase())
+  )
 
   const filtered = schema.rows.filter((row) => {
     if (!filter) return true
@@ -190,18 +195,30 @@ export function TableView({ schema, onUpdateRow, onDeleteRow, onAddRow, onUpdate
         </label>
       </div>
 
+      {/* Column filter bar */}
+      <div className="mb-3 flex items-center gap-3">
+        <input
+          type="text"
+          placeholder="Filter columns…"
+          value={columnFilter}
+          onChange={(e) => setColumnFilter(e.target.value)}
+          className="px-3 py-1.5 text-sm border border-gray-200 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-100 rounded-md outline-none focus:border-blue-300 focus:ring-1 focus:ring-blue-100 w-52"
+        />
+        <span className="text-xs text-gray-400 dark:text-gray-500">{visibleColumns.length} column{visibleColumns.length !== 1 ? 's' : ''}</span>
+      </div>
+
       {/* Table */}
       <div className="border border-gray-200 dark:border-gray-700 rounded-lg overflow-hidden">
         <div className={lockHeaders ? 'max-h-[70vh] overflow-auto' : 'overflow-x-auto'}>
           <table className="w-full border-collapse text-sm">
             <thead>
-              <tr className={`${lockHeaders ? 'sticky top-0 z-10' : ''} bg-[#f7f7f5] dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700`}>
-                {schema.columns.map((col, i) => (
+              <tr className={`${lockHeaders ? 'sticky top-0 z-20' : ''} bg-[#f7f7f5] dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700`}>
+                {visibleColumns.map((col, i) => (
                   <th
                     key={col.id}
                     style={{ minWidth: col.type === 'checkbox' ? 64 : 160 }}
                     className={`text-left px-3 py-2 font-medium text-gray-600 dark:text-gray-300 border-r border-gray-200 dark:border-gray-700 last:border-r-0 whitespace-nowrap ${
-                      lockFirstColumn && i === 0 ? 'sticky left-0 z-20 bg-[#f7f7f5] dark:bg-gray-800' : ''
+                      lockFirstColumn && i === 0 ? 'sticky left-0 z-30 bg-[#f7f7f5] dark:bg-gray-800' : ''
                     }`}
                   >
                     <button
@@ -231,7 +248,7 @@ export function TableView({ schema, onUpdateRow, onDeleteRow, onAddRow, onUpdate
             <tbody>
               {sorted.map((row) => (
                 <tr key={row.id} className="border-b border-gray-100 dark:border-gray-800 last:border-b-0 hover:bg-[#fafafa] dark:hover:bg-gray-800/50 group">
-                  {schema.columns.map((col, i) => (
+                  {visibleColumns.map((col, i) => (
                     <td
                       key={col.id}
                       className={`px-3 py-2 border-r border-gray-100 dark:border-gray-800 last:border-r-0 cursor-text relative ${
