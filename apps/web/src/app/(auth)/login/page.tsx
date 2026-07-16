@@ -5,6 +5,22 @@ import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { signIn } from '@/lib/auth-client'
 
+function describeLoginError(error: { status?: number; message?: string }): string {
+  if (error.status === undefined) {
+    return error.message ?? 'Could not reach the server. Check your connection and try again.'
+  }
+  if (error.status === 401 || error.status === 403) {
+    return 'Incorrect email or password.'
+  }
+  if (error.status === 429) {
+    return 'Too many login attempts. Please wait a moment and try again.'
+  }
+  if (error.status >= 500) {
+    return 'The server is having trouble right now. Please try again shortly.'
+  }
+  return error.message ?? 'Invalid credentials.'
+}
+
 export default function LoginPage() {
   const router = useRouter()
   const [email, setEmail] = useState('')
@@ -16,12 +32,17 @@ export default function LoginPage() {
     e.preventDefault()
     setLoading(true)
     setError('')
-    const result = await signIn.email({ email, password })
-    setLoading(false)
-    if (result.error) {
-      setError(result.error.message ?? 'Invalid credentials')
-    } else {
-      router.push('/home')
+    try {
+      const result = await signIn.email({ email, password })
+      if (result.error) {
+        setError(describeLoginError(result.error))
+      } else {
+        router.push('/home')
+      }
+    } catch {
+      setError('Could not reach the server. Check your connection and try again.')
+    } finally {
+      setLoading(false)
     }
   }
 
