@@ -64,7 +64,9 @@ export function PageItem({ page, depth, sortable = false }: PageItemProps) {
         style={{ paddingLeft: `${12 + depth * 16}px` }}
         className={cn(
           'group flex items-center gap-1 py-[3px] pr-2 cursor-pointer rounded-sm text-sm',
-          isActive ? 'bg-[#e3e2e0] text-gray-900' : 'text-gray-600 hover:bg-[#ebebea]',
+          isActive
+            ? 'bg-[#e3e2e0] dark:bg-sidebar-dark-active text-gray-900 dark:text-sidebar-dark-text'
+            : 'text-gray-600 dark:text-sidebar-dark-text hover:bg-[#ebebea] dark:hover:bg-sidebar-dark-hover',
         )}
       >
         {/* Drag handle (root level only) */}
@@ -72,7 +74,7 @@ export function PageItem({ page, depth, sortable = false }: PageItemProps) {
           <span
             {...attributes}
             {...listeners}
-            className="flex-shrink-0 text-gray-300 hover:text-gray-500 cursor-grab active:cursor-grabbing touch-none"
+            className="flex-shrink-0 text-gray-300 dark:text-gray-600 hover:text-gray-500 dark:hover:text-gray-400 cursor-grab active:cursor-grabbing touch-none"
             onClick={(e) => e.stopPropagation()}
           >
             <GripVertical size={13} />
@@ -82,7 +84,7 @@ export function PageItem({ page, depth, sortable = false }: PageItemProps) {
         {/* Expand toggle */}
         <button
           onClick={(e) => { e.stopPropagation(); setExpanded((v) => !v) }}
-          className="p-0.5 rounded hover:bg-[#d9d8d6] text-gray-400 flex-shrink-0"
+          className="p-0.5 rounded hover:bg-[#d9d8d6] dark:hover:bg-sidebar-dark-active text-gray-400 dark:text-sidebar-dark-muted flex-shrink-0"
         >
           {expanded ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
         </button>
@@ -92,8 +94,8 @@ export function PageItem({ page, depth, sortable = false }: PageItemProps) {
           {page.icon
             ? page.icon
             : page.isDatabase
-              ? <Table2 size={14} className="text-gray-400" />
-              : <FileText size={14} className="text-gray-400" />}
+              ? <Table2 size={14} className="text-gray-400 dark:text-sidebar-dark-muted" />
+              : <FileText size={14} className="text-gray-400 dark:text-sidebar-dark-muted" />}
         </span>
         <span className="flex-1 truncate">{page.title || 'Untitled'}</span>
 
@@ -102,14 +104,14 @@ export function PageItem({ page, depth, sortable = false }: PageItemProps) {
           <span className="flex items-center gap-0.5 flex-shrink-0">
             <button
               onClick={handleDelete}
-              className="p-0.5 rounded hover:bg-[#d9d8d6] text-gray-400 hover:text-red-500"
+              className="p-0.5 rounded hover:bg-[#d9d8d6] dark:hover:bg-sidebar-dark-active text-gray-400 dark:text-sidebar-dark-muted hover:text-red-500"
               title="Delete page"
             >
               <Trash2 size={13} />
             </button>
             <button
               onClick={handleAddChild}
-              className="p-0.5 rounded hover:bg-[#d9d8d6] text-gray-400"
+              className="p-0.5 rounded hover:bg-[#d9d8d6] dark:hover:bg-sidebar-dark-active text-gray-400 dark:text-sidebar-dark-muted"
               title="Add sub-page"
             >
               <Plus size={13} />

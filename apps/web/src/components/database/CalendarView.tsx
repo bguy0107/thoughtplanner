@@ -46,7 +46,7 @@ export function CalendarView({ schema, onAddRow, onDeleteRow, onUpdateRow }: Pro
 
   if (!dateCol) {
     return (
-      <div className="flex flex-col items-center justify-center py-20 text-gray-400">
+      <div className="flex flex-col items-center justify-center py-20 text-gray-400 dark:text-gray-500">
         <p className="text-base">Calendar view requires a Date column.</p>
         <p className="text-sm mt-1">Add a Date column in Properties to use this view.</p>
       </div>
@@ -96,33 +96,33 @@ export function CalendarView({ schema, onAddRow, onDeleteRow, onUpdateRow }: Pro
       <div className="flex items-center gap-3 mb-4">
         <button
           onClick={() => setCurrent((c) => addMonths(c, -1))}
-          className="p-1 rounded hover:bg-gray-100 text-gray-600"
+          className="p-1 rounded hover:bg-gray-100 dark:hover:bg-gray-800 text-gray-600 dark:text-gray-300"
         >
           <ChevronLeft size={16} />
         </button>
-        <span className="text-base font-semibold text-gray-800 w-36 text-center">
+        <span className="text-base font-semibold text-gray-800 dark:text-gray-200 w-36 text-center">
           {MONTH_NAMES[current.getMonth()]} {current.getFullYear()}
         </span>
         <button
           onClick={() => setCurrent((c) => addMonths(c, 1))}
-          className="p-1 rounded hover:bg-gray-100 text-gray-600"
+          className="p-1 rounded hover:bg-gray-100 dark:hover:bg-gray-800 text-gray-600 dark:text-gray-300"
         >
           <ChevronRight size={16} />
         </button>
         <button
           onClick={() => setCurrent(monthStart(new Date()))}
-          className="ml-2 px-2 py-0.5 text-xs rounded border border-gray-300 text-gray-600 hover:bg-gray-50"
+          className="ml-2 px-2 py-0.5 text-xs rounded border border-gray-300 dark:border-gray-600 text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-800"
         >
           Today
         </button>
       </div>
 
       {/* Grid */}
-      <div className="border border-gray-200 rounded-lg overflow-hidden">
+      <div className="border border-gray-200 dark:border-gray-700 rounded-lg overflow-hidden">
         {/* Weekday headers */}
-        <div className="grid grid-cols-7 border-b border-gray-200 bg-gray-50">
+        <div className="grid grid-cols-7 border-b border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800">
           {WEEKDAYS.map((d) => (
-            <div key={d} className="py-2 text-center text-xs font-medium text-gray-500">
+            <div key={d} className="py-2 text-center text-xs font-medium text-gray-500 dark:text-gray-400">
               {d}
             </div>
           ))}
@@ -135,7 +135,7 @@ export function CalendarView({ schema, onAddRow, onDeleteRow, onUpdateRow }: Pro
               return (
                 <div
                   key={i}
-                  className="min-h-[100px] border-b border-r border-gray-100 bg-gray-50 last:border-r-0"
+                  className="min-h-[100px] border-b border-r border-gray-100 dark:border-gray-800 bg-gray-50 dark:bg-gray-900 last:border-r-0"
                 />
               )
             }
@@ -148,7 +148,7 @@ export function CalendarView({ schema, onAddRow, onDeleteRow, onUpdateRow }: Pro
             return (
               <div
                 key={ymd}
-                className={`min-h-[100px] p-1.5 flex flex-col gap-1 border-gray-100 ${
+                className={`min-h-[100px] p-1.5 flex flex-col gap-1 border-gray-100 dark:border-gray-800 ${
                   isLastRow ? '' : 'border-b'
                 } ${isLastCol ? '' : 'border-r'} group`}
               >
@@ -158,14 +158,14 @@ export function CalendarView({ schema, onAddRow, onDeleteRow, onUpdateRow }: Pro
                     className={`text-xs font-medium w-6 h-6 flex items-center justify-center rounded-full ${
                       isToday
                         ? 'bg-blue-600 text-white'
-                        : 'text-gray-500'
+                        : 'text-gray-500 dark:text-gray-400'
                     }`}
                   >
                     {cell.date.getDate()}
                   </span>
                   <button
                     onClick={() => handleDayClick(ymd)}
-                    className="opacity-0 group-hover:opacity-100 p-0.5 rounded hover:bg-gray-200 text-gray-400 transition-opacity"
+                    className="opacity-0 group-hover:opacity-100 p-0.5 rounded hover:bg-gray-200 dark:hover:bg-gray-700 text-gray-400 dark:text-gray-500 transition-opacity"
                     title="Add row"
                   >
                     <Plus size={12} />
@@ -191,7 +191,7 @@ export function CalendarView({ schema, onAddRow, onDeleteRow, onUpdateRow }: Pro
                           if (e.key === 'Enter') commitEdit()
                           if (e.key === 'Escape') setEditingRow(null)
                         }}
-                        className="w-full text-xs px-1.5 py-0.5 rounded bg-blue-50 border border-blue-300 outline-none"
+                        className="w-full text-xs px-1.5 py-0.5 rounded bg-blue-50 dark:bg-blue-950/50 border border-blue-300 dark:border-blue-700 outline-none dark:text-gray-100"
                       />
                     )
                   }
@@ -202,7 +202,7 @@ export function CalendarView({ schema, onAddRow, onDeleteRow, onUpdateRow }: Pro
                       onClick={() =>
                         setEditingRow({ rowId: row.id, colId: nameCol.id, value: label })
                       }
-                      className="text-xs px-1.5 py-0.5 rounded bg-blue-100 text-blue-800 truncate cursor-pointer hover:bg-blue-200 transition-colors"
+                      className="text-xs px-1.5 py-0.5 rounded bg-blue-100 dark:bg-blue-950/50 text-blue-800 dark:text-blue-300 truncate cursor-pointer hover:bg-blue-200 dark:hover:bg-blue-900/50 transition-colors"
                       title={label}
                     >
                       {label}

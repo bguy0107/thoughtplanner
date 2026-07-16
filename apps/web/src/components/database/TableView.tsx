@@ -16,14 +16,14 @@ const TYPE_ICONS: Record<ColumnType, React.ReactNode> = {
 }
 
 const CHIP_COLORS = [
-  'bg-blue-100 text-blue-700',
-  'bg-green-100 text-green-700',
-  'bg-yellow-100 text-yellow-700',
-  'bg-purple-100 text-purple-700',
-  'bg-red-100 text-red-700',
-  'bg-orange-100 text-orange-700',
-  'bg-pink-100 text-pink-700',
-  'bg-teal-100 text-teal-700',
+  'bg-blue-100 text-blue-700 dark:bg-blue-950/50 dark:text-blue-300',
+  'bg-green-100 text-green-700 dark:bg-green-950/50 dark:text-green-300',
+  'bg-yellow-100 text-yellow-700 dark:bg-yellow-950/50 dark:text-yellow-300',
+  'bg-purple-100 text-purple-700 dark:bg-purple-950/50 dark:text-purple-300',
+  'bg-red-100 text-red-700 dark:bg-red-950/50 dark:text-red-300',
+  'bg-orange-100 text-orange-700 dark:bg-orange-950/50 dark:text-orange-300',
+  'bg-pink-100 text-pink-700 dark:bg-pink-950/50 dark:text-pink-300',
+  'bg-teal-100 text-teal-700 dark:bg-teal-950/50 dark:text-teal-300',
 ]
 
 export function chipColor(options: string[], value: string) {
@@ -165,28 +165,28 @@ export function TableView({ schema, onUpdateRow, onDeleteRow, onAddRow, onUpdate
           placeholder="Filter rows…"
           value={filter}
           onChange={(e) => setFilter(e.target.value)}
-          className="px-3 py-1.5 text-sm border border-gray-200 rounded-md outline-none focus:border-blue-300 focus:ring-1 focus:ring-blue-100 w-52"
+          className="px-3 py-1.5 text-sm border border-gray-200 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-100 rounded-md outline-none focus:border-blue-300 focus:ring-1 focus:ring-blue-100 w-52"
         />
-        <span className="text-xs text-gray-400">{sorted.length} row{sorted.length !== 1 ? 's' : ''}</span>
+        <span className="text-xs text-gray-400 dark:text-gray-500">{sorted.length} row{sorted.length !== 1 ? 's' : ''}</span>
       </div>
 
       {/* Table */}
-      <div className="border border-gray-200 rounded-lg overflow-hidden">
+      <div className="border border-gray-200 dark:border-gray-700 rounded-lg overflow-hidden">
         <div className="overflow-x-auto">
           <table className="w-full border-collapse text-sm">
             <thead>
-              <tr className="bg-[#f7f7f5] border-b border-gray-200">
+              <tr className="bg-[#f7f7f5] dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700">
                 {schema.columns.map((col) => (
                   <th
                     key={col.id}
                     style={{ minWidth: col.type === 'checkbox' ? 64 : 160 }}
-                    className="text-left px-3 py-2 font-medium text-gray-600 border-r border-gray-200 last:border-r-0 whitespace-nowrap"
+                    className="text-left px-3 py-2 font-medium text-gray-600 dark:text-gray-300 border-r border-gray-200 dark:border-gray-700 last:border-r-0 whitespace-nowrap"
                   >
                     <button
                       onClick={() => cycleSort(col.id)}
-                      className="flex items-center gap-1.5 hover:text-gray-900 transition-colors group"
+                      className="flex items-center gap-1.5 hover:text-gray-900 dark:hover:text-gray-100 transition-colors group"
                     >
-                      <span className="text-gray-400">{TYPE_ICONS[col.type]}</span>
+                      <span className="text-gray-400 dark:text-gray-500">{TYPE_ICONS[col.type]}</span>
                       {col.name}
                       {sort?.colId === col.id
                         ? sort.dir === 'asc' ? <ArrowUp size={11} /> : <ArrowDown size={11} />
@@ -194,11 +194,11 @@ export function TableView({ schema, onUpdateRow, onDeleteRow, onAddRow, onUpdate
                     </button>
                   </th>
                 ))}
-                <th className="px-2 py-2 w-10 border-r border-gray-200">
+                <th className="px-2 py-2 w-10 border-r border-gray-200 dark:border-gray-700">
                   <button
                     onClick={addColumn}
                     title="Add column"
-                    className="p-1 rounded hover:bg-gray-200 text-gray-400 hover:text-gray-600 transition-colors"
+                    className="p-1 rounded hover:bg-gray-200 dark:hover:bg-gray-700 text-gray-400 dark:text-gray-500 hover:text-gray-600 dark:hover:text-gray-300 transition-colors"
                   >
                     <Plus size={13} />
                   </button>
@@ -208,11 +208,11 @@ export function TableView({ schema, onUpdateRow, onDeleteRow, onAddRow, onUpdate
             </thead>
             <tbody>
               {sorted.map((row) => (
-                <tr key={row.id} className="border-b border-gray-100 last:border-b-0 hover:bg-[#fafafa] group">
+                <tr key={row.id} className="border-b border-gray-100 dark:border-gray-800 last:border-b-0 hover:bg-[#fafafa] dark:hover:bg-gray-800/50 group">
                   {schema.columns.map((col) => (
                     <td
                       key={col.id}
-                      className="px-3 py-2 border-r border-gray-100 last:border-r-0 cursor-text relative"
+                      className="px-3 py-2 border-r border-gray-100 dark:border-gray-800 last:border-r-0 cursor-text relative"
                       onClick={() => startEdit(row.id, col)}
                     >
                       {col.type === 'checkbox' ? (
@@ -224,7 +224,7 @@ export function TableView({ schema, onUpdateRow, onDeleteRow, onAddRow, onUpdate
                           className="cursor-pointer accent-blue-500"
                         />
                       ) : col.type === 'rollup' ? (
-                        <span className="text-gray-500 text-xs font-mono">
+                        <span className="text-gray-500 dark:text-gray-400 text-xs font-mono">
                           {getProp(row, col.id) != null ? String(getProp(row, col.id)) : '—'}
                         </span>
                       ) : col.type === 'relation' ? (
@@ -254,7 +254,7 @@ export function TableView({ schema, onUpdateRow, onDeleteRow, onAddRow, onUpdate
                         <div className="relative">
                           {getProp(row, col.id)
                             ? <span className={`px-2 py-0.5 rounded text-xs font-medium ${chipColor(col.options ?? [], getProp(row, col.id) as string)}`}>{getProp(row, col.id) as string}</span>
-                            : <span className="text-gray-300 text-xs">—</span>}
+                            : <span className="text-gray-300 dark:text-gray-600 text-xs">—</span>}
                           {selectOpen?.rowId === row.id && selectOpen?.colId === col.id && (
                             <OptionDropdown
                               options={col.options ?? []}
@@ -272,7 +272,7 @@ export function TableView({ schema, onUpdateRow, onDeleteRow, onAddRow, onUpdate
                               <span key={opt} className={`px-2 py-0.5 rounded text-xs font-medium ${chipColor(col.options ?? [], opt)}`}>{opt}</span>
                             ))}
                             {!((getProp(row, col.id) as string[] | null) ?? []).length && (
-                              <span className="text-gray-300 text-xs">—</span>
+                              <span className="text-gray-300 dark:text-gray-600 text-xs">—</span>
                             )}
                           </div>
                           {selectOpen?.rowId === row.id && selectOpen?.colId === col.id && (
@@ -287,18 +287,18 @@ export function TableView({ schema, onUpdateRow, onDeleteRow, onAddRow, onUpdate
                           )}
                         </div>
                       ) : (
-                        <span className={displayValue(row, col) ? 'text-gray-800' : 'text-gray-300 text-xs'}>
+                        <span className={displayValue(row, col) ? 'text-gray-800 dark:text-gray-200' : 'text-gray-300 dark:text-gray-600 text-xs'}>
                           {displayValue(row, col) || '—'}
                         </span>
                       )}
                     </td>
                   ))}
-                  <td className="border-r border-gray-100" />
+                  <td className="border-r border-gray-100 dark:border-gray-800" />
                   <td className="pr-2 text-right">
                     <button
                       onClick={() => onDeleteRow(row.id)}
                       title="Delete row"
-                      className="p-1 rounded hover:bg-red-50 text-transparent group-hover:text-gray-300 hover:!text-red-500 transition-colors"
+                      className="p-1 rounded hover:bg-red-50 dark:hover:bg-red-950/50 text-transparent group-hover:text-gray-300 dark:group-hover:text-gray-600 hover:!text-red-500 transition-colors"
                     >
                       <Trash2 size={13} />
                     </button>
@@ -311,7 +311,7 @@ export function TableView({ schema, onUpdateRow, onDeleteRow, onAddRow, onUpdate
 
         <button
           onClick={() => onAddRow()}
-          className="w-full flex items-center gap-2 px-4 py-2.5 text-sm text-gray-500 hover:bg-[#fafafa] hover:text-gray-700 transition-colors border-t border-gray-100"
+          className="w-full flex items-center gap-2 px-4 py-2.5 text-sm text-gray-500 dark:text-gray-400 hover:bg-[#fafafa] dark:hover:bg-gray-800 hover:text-gray-700 dark:hover:text-gray-200 transition-colors border-t border-gray-100 dark:border-gray-800"
         >
           <Plus size={14} />
           Add row
@@ -367,32 +367,32 @@ function RelationCell({ row, col, isOpen, onToggle, onClose }: RelationCellProps
     <div ref={ref}>
       <div className="flex flex-wrap gap-1 min-h-[20px]">
         {resolvedNames.map((r) => (
-          <span key={r.id} className="px-2 py-0.5 rounded text-xs font-medium bg-purple-100 text-purple-700 truncate max-w-[140px]" title={r.displayName}>
+          <span key={r.id} className="px-2 py-0.5 rounded text-xs font-medium bg-purple-100 text-purple-700 dark:bg-purple-950/50 dark:text-purple-300 truncate max-w-[140px]" title={r.displayName}>
             {r.displayName}
           </span>
         ))}
-        {resolvedNames.length === 0 && <span className="text-gray-300 text-xs">—</span>}
+        {resolvedNames.length === 0 && <span className="text-gray-300 dark:text-gray-600 text-xs">—</span>}
       </div>
 
       {isOpen && (
         <div
           onClick={(e) => e.stopPropagation()}
-          className="absolute left-0 top-full z-50 mt-1 bg-white border border-gray-200 rounded-lg shadow-lg min-w-52 max-h-56 overflow-y-auto py-1"
+          className="absolute left-0 top-full z-50 mt-1 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg shadow-lg min-w-52 max-h-56 overflow-y-auto py-1"
         >
           {!col.targetPageId && (
-            <p className="px-3 py-2 text-xs text-gray-400">No target database configured.</p>
+            <p className="px-3 py-2 text-xs text-gray-400 dark:text-gray-500">No target database configured.</p>
           )}
           {allRows.length === 0 && col.targetPageId && (
-            <p className="px-3 py-2 text-xs text-gray-400">No rows in target database.</p>
+            <p className="px-3 py-2 text-xs text-gray-400 dark:text-gray-500">No rows in target database.</p>
           )}
           {allRows.map((r) => (
             <button
               key={r.id}
               onClick={() => onToggle(r.id)}
-              className="w-full flex items-center gap-2 px-3 py-1.5 text-sm hover:bg-gray-50 text-left"
+              className="w-full flex items-center gap-2 px-3 py-1.5 text-sm hover:bg-gray-50 dark:hover:bg-gray-700 text-left dark:text-gray-200"
             >
               <span className={`w-4 h-4 rounded border flex items-center justify-center flex-shrink-0 text-xs ${
-                selectedIds.includes(r.id) ? 'bg-purple-500 border-purple-500 text-white' : 'border-gray-300'
+                selectedIds.includes(r.id) ? 'bg-purple-500 border-purple-500 text-white' : 'border-gray-300 dark:border-gray-600'
               }`}>
                 {selectedIds.includes(r.id) && '✓'}
               </span>
@@ -432,19 +432,19 @@ function OptionDropdown({ options, selected, isMulti, onSelect, onToggle, onClea
     <div
       ref={ref}
       onClick={(e) => e.stopPropagation()}
-      className="absolute left-0 top-full z-50 mt-1 bg-white border border-gray-200 rounded-lg shadow-lg min-w-44 py-1"
+      className="absolute left-0 top-full z-50 mt-1 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg shadow-lg min-w-44 py-1"
     >
       {options.length === 0 && (
-        <p className="px-3 py-2 text-xs text-gray-400">No options — add via Properties.</p>
+        <p className="px-3 py-2 text-xs text-gray-400 dark:text-gray-500">No options — add via Properties.</p>
       )}
       {options.map((opt) => (
         <button
           key={opt}
-          className="w-full flex items-center gap-2 px-3 py-1.5 text-sm hover:bg-gray-50 text-left"
+          className="w-full flex items-center gap-2 px-3 py-1.5 text-sm hover:bg-gray-50 dark:hover:bg-gray-700 text-left"
           onClick={() => isMulti ? onToggle?.(opt) : onSelect?.(opt)}
         >
           {isMulti && (
-            <span className={`w-4 h-4 rounded border flex items-center justify-center flex-shrink-0 ${selected.includes(opt) ? 'bg-blue-500 border-blue-500 text-white' : 'border-gray-300'}`}>
+            <span className={`w-4 h-4 rounded border flex items-center justify-center flex-shrink-0 ${selected.includes(opt) ? 'bg-blue-500 border-blue-500 text-white' : 'border-gray-300 dark:border-gray-600'}`}>
               {selected.includes(opt) && '✓'}
             </span>
           )}
@@ -452,9 +452,9 @@ function OptionDropdown({ options, selected, isMulti, onSelect, onToggle, onClea
         </button>
       ))}
       {isMulti && selected.length > 0 && (
-        <div className="border-t border-gray-100 mt-1 pt-1">
+        <div className="border-t border-gray-100 dark:border-gray-700 mt-1 pt-1">
           <button
-            className="w-full px-3 py-1.5 text-xs text-gray-400 hover:text-gray-600 text-left"
+            className="w-full px-3 py-1.5 text-xs text-gray-400 dark:text-gray-500 hover:text-gray-600 dark:hover:text-gray-300 text-left"
             onClick={onClear}
           >
             Clear selection

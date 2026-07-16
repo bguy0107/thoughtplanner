@@ -22,26 +22,26 @@ export default function SharePage({ params }: { params: Promise<{ id: string }> 
 
   if (loading) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-white">
-        <div className="w-5 h-5 border-2 border-gray-300 border-t-gray-600 rounded-full animate-spin" />
+      <div className="min-h-screen flex items-center justify-center bg-white dark:bg-[#191919]">
+        <div className="w-5 h-5 border-2 border-gray-300 dark:border-gray-600 border-t-gray-600 dark:border-t-gray-300 rounded-full animate-spin" />
       </div>
     )
   }
 
   if (error || !page) {
     return (
-      <div className="min-h-screen flex flex-col items-center justify-center gap-3 bg-white text-center px-4">
-        <p className="text-gray-500 text-lg">{error ?? 'Page not found'}</p>
-        <a href="/" className="text-sm text-blue-500 hover:underline">Go home</a>
+      <div className="min-h-screen flex flex-col items-center justify-center gap-3 bg-white dark:bg-[#191919] text-center px-4">
+        <p className="text-gray-500 dark:text-gray-400 text-lg">{error ?? 'Page not found'}</p>
+        <a href="/" className="text-sm text-blue-500 dark:text-blue-400 hover:underline">Go home</a>
       </div>
     )
   }
 
   return (
-    <div className="min-h-screen bg-white">
+    <div className="min-h-screen bg-white dark:bg-[#191919]">
       {/* Cover */}
       {page.coverImage && (
-        <div className="w-full h-48 md:h-64 overflow-hidden bg-gray-100">
+        <div className="w-full h-48 md:h-64 overflow-hidden bg-gray-100 dark:bg-gray-800">
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img src={page.coverImage} alt="Cover" className="w-full h-full object-cover" />
         </div>
@@ -52,7 +52,7 @@ export default function SharePage({ params }: { params: Promise<{ id: string }> 
         {page.icon && <div className="text-5xl mb-4 leading-none">{page.icon}</div>}
 
         {/* Title */}
-        <h1 className="text-4xl font-bold text-gray-900 mb-6">{page.title || 'Untitled'}</h1>
+        <h1 className="text-4xl font-bold text-gray-900 dark:text-gray-100 mb-6">{page.title || 'Untitled'}</h1>
 
         {/* Content */}
         <Editor
@@ -64,7 +64,7 @@ export default function SharePage({ params }: { params: Promise<{ id: string }> 
         />
 
         {/* Footer badge */}
-        <div className="mt-16 pt-6 border-t border-gray-100 flex items-center gap-1.5 text-xs text-gray-400">
+        <div className="mt-16 pt-6 border-t border-gray-100 dark:border-gray-800 flex items-center gap-1.5 text-xs text-gray-400 dark:text-gray-500">
           <Globe size={12} />
           <span>Shared with Thoughtplanner</span>
         </div>

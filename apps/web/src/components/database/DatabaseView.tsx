@@ -75,19 +75,19 @@ export function DatabaseView({ page, onTitleChange }: Props) {
             onKeyDown={(e) => {
               if (e.key === 'Enter') (e.target as HTMLInputElement).blur()
             }}
-            className="w-full text-4xl font-bold text-gray-900 outline-none placeholder-gray-300 mb-4 bg-transparent"
+            className="w-full text-4xl font-bold text-gray-900 dark:text-gray-100 outline-none placeholder-gray-300 dark:placeholder-gray-600 mb-4 bg-transparent"
           />
 
           {/* View tabs + properties toggle */}
-          <div className="flex items-center gap-0.5 border-b border-gray-200 pb-0">
+          <div className="flex items-center gap-0.5 border-b border-gray-200 dark:border-gray-800 pb-0">
             {views.map((v) => (
               <button
                 key={v.mode}
                 onClick={() => setView(v.mode)}
                 className={`flex items-center gap-1.5 px-3 py-2 text-sm rounded-t transition-colors -mb-px border-b-2 ${
                   view === v.mode
-                    ? 'text-gray-900 font-medium border-gray-900'
-                    : 'text-gray-500 hover:text-gray-700 border-transparent'
+                    ? 'text-gray-900 dark:text-gray-100 font-medium border-gray-900 dark:border-gray-100'
+                    : 'text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 border-transparent'
                 }`}
               >
                 {v.icon}
@@ -97,7 +97,7 @@ export function DatabaseView({ page, onTitleChange }: Props) {
             <div className="flex-1" />
             <button
               onClick={() => setShowImport(true)}
-              className="flex items-center gap-1.5 px-3 py-2 text-sm rounded transition-colors mb-1 text-gray-500 hover:text-gray-700 hover:bg-gray-100"
+              className="flex items-center gap-1.5 px-3 py-2 text-sm rounded transition-colors mb-1 text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-800"
             >
               <FileSpreadsheet size={14} />
               Import
@@ -106,8 +106,8 @@ export function DatabaseView({ page, onTitleChange }: Props) {
               onClick={() => setShowSchema((s) => !s)}
               className={`flex items-center gap-1.5 px-3 py-2 text-sm rounded transition-colors mb-1 ${
                 showSchema
-                  ? 'bg-blue-50 text-blue-600'
-                  : 'text-gray-500 hover:text-gray-700 hover:bg-gray-100'
+                  ? 'bg-blue-50 dark:bg-blue-950/50 text-blue-600 dark:text-blue-400'
+                  : 'text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-800'
               }`}
             >
               <Settings2 size={14} />
@@ -123,7 +123,7 @@ export function DatabaseView({ page, onTitleChange }: Props) {
           <div className="max-w-5xl mx-auto">
             {!schema ? (
               <div className="flex items-center justify-center py-20">
-                <div className="w-5 h-5 border-2 border-gray-300 border-t-gray-600 rounded-full animate-spin" />
+                <div className="w-5 h-5 border-2 border-gray-300 dark:border-gray-600 border-t-gray-600 dark:border-t-gray-300 rounded-full animate-spin" />
               </div>
             ) : view === 'table' ? (
               <TableView

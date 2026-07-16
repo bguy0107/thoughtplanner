@@ -30,28 +30,28 @@ function GalleryCard({ row, schema, onDelete, onEditName }: GalleryCardProps) {
   const extraCols = schema.columns.slice(1)
 
   return (
-    <div className="bg-white rounded-lg border border-gray-200 p-4 group hover:shadow-sm transition-shadow flex flex-col gap-2">
+    <div className="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 p-4 group hover:shadow-sm transition-shadow flex flex-col gap-2">
       {/* Title */}
       <div className="flex items-start gap-2">
         {editing ? (
           <input
             autoFocus
             defaultValue={name}
-            className="flex-1 font-medium text-gray-900 outline-none border-b border-blue-300 bg-transparent"
+            className="flex-1 font-medium text-gray-900 dark:text-gray-100 outline-none border-b border-blue-300 bg-transparent"
             onBlur={(e) => { onEditName(row.id, e.target.value); setEditing(false) }}
             onKeyDown={(e) => { if (e.key === 'Enter') (e.target as HTMLInputElement).blur() }}
           />
         ) : (
           <span
-            className="flex-1 font-medium text-gray-900 cursor-text"
+            className="flex-1 font-medium text-gray-900 dark:text-gray-100 cursor-text"
             onClick={() => setEditing(true)}
           >
-            {name || <span className="text-gray-300 font-normal">Untitled</span>}
+            {name || <span className="text-gray-300 dark:text-gray-600 font-normal">Untitled</span>}
           </span>
         )}
         <button
           onClick={onDelete}
-          className="p-0.5 rounded text-transparent group-hover:text-gray-300 hover:!text-red-500 transition-colors flex-shrink-0"
+          className="p-0.5 rounded text-transparent group-hover:text-gray-300 dark:group-hover:text-gray-600 hover:!text-red-500 transition-colors flex-shrink-0"
         >
           <Trash2 size={13} />
         </button>
@@ -63,9 +63,9 @@ function GalleryCard({ row, schema, onDelete, onEditName }: GalleryCardProps) {
         if (val == null || val === '' || (Array.isArray(val) && val.length === 0)) return null
         return (
           <div key={col.id} className="flex items-center gap-1.5 flex-wrap">
-            <span className="text-xs text-gray-400 font-medium">{col.name}</span>
+            <span className="text-xs text-gray-400 dark:text-gray-500 font-medium">{col.name}</span>
             {col.type === 'checkbox' ? (
-              <span className={`text-xs px-1.5 py-0.5 rounded ${val ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-500'}`}>
+              <span className={`text-xs px-1.5 py-0.5 rounded ${val ? 'bg-green-100 text-green-700 dark:bg-green-950/50 dark:text-green-300' : 'bg-gray-100 text-gray-500 dark:bg-gray-700 dark:text-gray-400'}`}>
                 {val ? 'Yes' : 'No'}
               </span>
             ) : col.type === 'select' ? (
@@ -79,7 +79,7 @@ function GalleryCard({ row, schema, onDelete, onEditName }: GalleryCardProps) {
                 ))}
               </div>
             ) : (
-              <span className="text-xs text-gray-600">{String(val)}</span>
+              <span className="text-xs text-gray-600 dark:text-gray-300">{String(val)}</span>
             )}
           </div>
         )
@@ -113,7 +113,7 @@ export function GalleryView({ schema, onUpdateRow, onDeleteRow, onAddRow }: Prop
         {/* New card button */}
         <button
           onClick={() => onAddRow()}
-          className="flex items-center justify-center gap-2 rounded-lg border border-dashed border-gray-300 p-4 text-sm text-gray-400 hover:text-gray-600 hover:border-gray-400 hover:bg-gray-50 transition-colors min-h-[80px]"
+          className="flex items-center justify-center gap-2 rounded-lg border border-dashed border-gray-300 dark:border-gray-700 p-4 text-sm text-gray-400 dark:text-gray-500 hover:text-gray-600 dark:hover:text-gray-300 hover:border-gray-400 dark:hover:border-gray-600 hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors min-h-[80px]"
         >
           <Plus size={15} />
           New

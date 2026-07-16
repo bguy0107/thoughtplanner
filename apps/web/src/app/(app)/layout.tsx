@@ -39,8 +39,8 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
 
   if (isPending || !session) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-[#f7f7f5]">
-        <div className="w-6 h-6 border-2 border-gray-300 border-t-gray-700 rounded-full animate-spin" />
+      <div className="min-h-screen flex items-center justify-center bg-[#f7f7f5] dark:bg-sidebar-dark-bg">
+        <div className="w-6 h-6 border-2 border-gray-300 dark:border-gray-600 border-t-gray-700 dark:border-t-gray-300 rounded-full animate-spin" />
       </div>
     )
   }
@@ -67,19 +67,19 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
       {/* Main content */}
       <main className="flex-1 overflow-y-auto flex flex-col min-w-0">
         {/* Mobile top bar */}
-        <div className="flex items-center gap-2 px-3 py-2 border-b border-gray-200 md:hidden bg-[#f7f7f5]">
+        <div className="flex items-center gap-2 px-3 py-2 border-b border-gray-200 dark:border-gray-800 md:hidden bg-[#f7f7f5] dark:bg-sidebar-dark-bg">
           <button
             onClick={() => setMobileOpen(true)}
-            className="p-1.5 rounded hover:bg-[#ebebea] text-gray-500"
+            className="p-1.5 rounded hover:bg-[#ebebea] dark:hover:bg-sidebar-dark-hover text-gray-500 dark:text-sidebar-dark-muted"
           >
             <Menu size={18} />
           </button>
-          <span className="text-sm font-semibold text-gray-700 flex-1 truncate">
+          <span className="text-sm font-semibold text-gray-700 dark:text-sidebar-dark-text flex-1 truncate">
             Thoughtplanner
           </span>
           <button
             onClick={() => setSearchOpen(true)}
-            className="p-1.5 rounded hover:bg-[#ebebea] text-gray-500"
+            className="p-1.5 rounded hover:bg-[#ebebea] dark:hover:bg-sidebar-dark-hover text-gray-500 dark:text-sidebar-dark-muted"
           >
             <Search size={18} />
           </button>

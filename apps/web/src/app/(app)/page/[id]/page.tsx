@@ -120,13 +120,13 @@ export default function PageView({ params }: { params: Promise<{ id: string }> }
   if (loading) {
     return (
       <div className="flex items-center justify-center h-full">
-        <div className="w-5 h-5 border-2 border-gray-300 border-t-gray-600 rounded-full animate-spin" />
+        <div className="w-5 h-5 border-2 border-gray-300 dark:border-gray-600 border-t-gray-600 dark:border-t-gray-300 rounded-full animate-spin" />
       </div>
     )
   }
 
   if (!page) {
-    return <div className="flex items-center justify-center h-full text-gray-400">Page not found</div>
+    return <div className="flex items-center justify-center h-full text-gray-400 dark:text-gray-500">Page not found</div>
   }
 
   if (page.isDatabase) {
@@ -137,20 +137,20 @@ export default function PageView({ params }: { params: Promise<{ id: string }> }
     <div className="min-h-full">
       {/* Cover image */}
       {page.coverImage ? (
-        <div className="relative w-full h-48 md:h-64 group overflow-hidden bg-gray-100">
+        <div className="relative w-full h-48 md:h-64 group overflow-hidden bg-gray-100 dark:bg-gray-800">
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img src={page.coverImage} alt="Cover" className="w-full h-full object-cover" />
           <div className="absolute inset-0 bg-black/0 group-hover:bg-black/10 transition-colors" />
           <div className="absolute bottom-2 right-3 hidden group-hover:flex gap-2">
             <button
               onClick={() => coverInputRef.current?.click()}
-              className="flex items-center gap-1 text-xs bg-white/90 hover:bg-white text-gray-700 px-2 py-1 rounded shadow transition-colors"
+              className="flex items-center gap-1 text-xs bg-white/90 dark:bg-gray-900/90 hover:bg-white dark:hover:bg-gray-900 text-gray-700 dark:text-gray-200 px-2 py-1 rounded shadow transition-colors"
             >
               <ImagePlus size={12} /> Change cover
             </button>
             <button
               onClick={handleRemoveCover}
-              className="flex items-center gap-1 text-xs bg-white/90 hover:bg-white text-gray-700 px-2 py-1 rounded shadow transition-colors"
+              className="flex items-center gap-1 text-xs bg-white/90 dark:bg-gray-900/90 hover:bg-white dark:hover:bg-gray-900 text-gray-700 dark:text-gray-200 px-2 py-1 rounded shadow transition-colors"
             >
               <X size={12} /> Remove
             </button>
@@ -174,34 +174,34 @@ export default function PageView({ params }: { params: Promise<{ id: string }> }
             {!page.coverImage && (
               <button
                 onClick={() => coverInputRef.current?.click()}
-                className="flex items-center gap-1 text-xs text-gray-400 hover:text-gray-600 transition-colors"
+                className="flex items-center gap-1 text-xs text-gray-400 dark:text-gray-500 hover:text-gray-600 dark:hover:text-gray-300 transition-colors"
               >
                 <ImagePlus size={13} /> Add cover
               </button>
             )}
             <button
               onClick={handleTogglePublic}
-              className="flex items-center gap-1 text-xs text-gray-400 hover:text-gray-600 transition-colors"
+              className="flex items-center gap-1 text-xs text-gray-400 dark:text-gray-500 hover:text-gray-600 dark:hover:text-gray-300 transition-colors"
             >
               {page.isPublic ? <><Globe size={13} /> Public</> : <><Lock size={13} /> Private</>}
             </button>
             {page.isPublic && (
               <button
                 onClick={handleCopyShareLink}
-                className="flex items-center gap-1 text-xs text-gray-400 hover:text-gray-600 transition-colors"
+                className="flex items-center gap-1 text-xs text-gray-400 dark:text-gray-500 hover:text-gray-600 dark:hover:text-gray-300 transition-colors"
               >
                 <Link2 size={13} /> {copied ? 'Copied!' : 'Copy link'}
               </button>
             )}
             <button
               onClick={handleExportMarkdown}
-              className="flex items-center gap-1 text-xs text-gray-400 hover:text-gray-600 transition-colors"
+              className="flex items-center gap-1 text-xs text-gray-400 dark:text-gray-500 hover:text-gray-600 dark:hover:text-gray-300 transition-colors"
             >
               <Download size={13} /> Export .md
             </button>
             <button
               onClick={() => markdownImportRef.current?.click()}
-              className="flex items-center gap-1 text-xs text-gray-400 hover:text-gray-600 transition-colors"
+              className="flex items-center gap-1 text-xs text-gray-400 dark:text-gray-500 hover:text-gray-600 dark:hover:text-gray-300 transition-colors"
             >
               <Upload size={13} /> Import .md
             </button>
@@ -220,7 +220,7 @@ export default function PageView({ params }: { params: Promise<{ id: string }> }
               ;(e.target as HTMLInputElement).blur()
             }
           }}
-          className="w-full text-4xl font-bold text-gray-900 outline-none placeholder-gray-300 mb-6 bg-transparent"
+          className="w-full text-4xl font-bold text-gray-900 dark:text-gray-100 outline-none placeholder-gray-300 dark:placeholder-gray-600 mb-6 bg-transparent"
         />
 
         <Editor

@@ -67,7 +67,7 @@ export function PageTree({ parentId, depth }: PageTreeProps) {
   }
 
   if (children.length === 0 && depth === 0) {
-    return <p className="px-4 py-2 text-xs text-gray-400">No pages yet</p>
+    return <p className="px-4 py-2 text-xs text-gray-400 dark:text-sidebar-dark-muted">No pages yet</p>
   }
 
   if (depth > 0) {

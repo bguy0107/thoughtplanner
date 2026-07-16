@@ -140,7 +140,7 @@ export const Editor = forwardRef<EditorHandle, EditorProps>(function Editor(
     },
     editorProps: {
       attributes: {
-        class: 'tiptap prose prose-gray max-w-none focus:outline-none min-h-[60vh]',
+        class: 'tiptap prose prose-gray dark:prose-invert max-w-none focus:outline-none min-h-[60vh]',
       },
     },
   })

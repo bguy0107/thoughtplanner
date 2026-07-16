@@ -63,24 +63,24 @@ export function SearchModal({ onClose }: SearchModalProps) {
   return (
     <div className="fixed inset-0 z-50 flex items-start justify-center pt-[15vh] px-4" onClick={onClose}>
       <div
-        className="bg-white rounded-xl shadow-2xl border border-gray-200 w-full max-w-lg overflow-hidden"
+        className="bg-white dark:bg-gray-900 rounded-xl shadow-2xl border border-gray-200 dark:border-gray-700 w-full max-w-lg overflow-hidden"
         onClick={(e) => e.stopPropagation()}
       >
         {/* Input */}
-        <div className="flex items-center gap-3 px-4 py-3 border-b border-gray-100">
-          <Search size={18} className="text-gray-400 flex-shrink-0" />
+        <div className="flex items-center gap-3 px-4 py-3 border-b border-gray-100 dark:border-gray-800">
+          <Search size={18} className="text-gray-400 dark:text-gray-500 flex-shrink-0" />
           <input
             ref={inputRef}
             value={query}
             onChange={(e) => setQuery(e.target.value)}
             onKeyDown={handleKeyDown}
             placeholder="Search pages…"
-            className="flex-1 text-gray-900 placeholder-gray-400 outline-none text-sm"
+            className="flex-1 text-gray-900 dark:text-gray-100 placeholder-gray-400 dark:placeholder-gray-500 outline-none text-sm bg-transparent"
           />
           {loading && (
-            <div className="w-4 h-4 border-2 border-gray-200 border-t-gray-500 rounded-full animate-spin flex-shrink-0" />
+            <div className="w-4 h-4 border-2 border-gray-200 dark:border-gray-700 border-t-gray-500 dark:border-t-gray-400 rounded-full animate-spin flex-shrink-0" />
           )}
-          <button onClick={onClose} className="text-gray-400 hover:text-gray-600">
+          <button onClick={onClose} className="text-gray-400 dark:text-gray-500 hover:text-gray-600 dark:hover:text-gray-300">
             <X size={16} />
           </button>
         </div>
@@ -95,17 +95,17 @@ export function SearchModal({ onClose }: SearchModalProps) {
                   onMouseEnter={() => setActiveIndex(i)}
                   className={cn(
                     'w-full flex items-center gap-3 px-4 py-2 text-sm text-left transition-colors',
-                    i === activeIndex ? 'bg-gray-100' : 'hover:bg-gray-50',
+                    i === activeIndex ? 'bg-gray-100 dark:bg-gray-800' : 'hover:bg-gray-50 dark:hover:bg-gray-800',
                   )}
                 >
                   <span className="flex-shrink-0 text-base leading-none">
                     {r.icon
                       ? r.icon
                       : r.isDatabase
-                        ? <Table2 size={15} className="text-gray-400" />
-                        : <FileText size={15} className="text-gray-400" />}
+                        ? <Table2 size={15} className="text-gray-400 dark:text-gray-500" />
+                        : <FileText size={15} className="text-gray-400 dark:text-gray-500" />}
                   </span>
-                  <span className="truncate text-gray-800">{r.title || 'Untitled'}</span>
+                  <span className="truncate text-gray-800 dark:text-gray-200">{r.title || 'Untitled'}</span>
                 </button>
               </li>
             ))}
@@ -113,11 +113,11 @@ export function SearchModal({ onClose }: SearchModalProps) {
         )}
 
         {query.trim() && !loading && results.length === 0 && (
-          <p className="px-4 py-6 text-sm text-center text-gray-400">No pages found</p>
+          <p className="px-4 py-6 text-sm text-center text-gray-400 dark:text-gray-500">No pages found</p>
         )}
 
         {!query && (
-          <p className="px-4 py-4 text-xs text-center text-gray-400">Type to search your pages</p>
+          <p className="px-4 py-4 text-xs text-center text-gray-400 dark:text-gray-500">Type to search your pages</p>
         )}
       </div>
     </div>

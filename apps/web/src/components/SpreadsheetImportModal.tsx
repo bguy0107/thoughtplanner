@@ -83,19 +83,19 @@ export function SpreadsheetImportModal({ onClose, targetPageId, parentPageId, on
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/30" onClick={onClose}>
       <div
-        className="bg-white rounded-xl shadow-2xl w-full max-w-md p-6 m-4"
+        className="bg-white dark:bg-gray-900 rounded-xl shadow-2xl w-full max-w-md p-6 m-4"
         onClick={(e) => e.stopPropagation()}
       >
         <div className="flex items-center justify-between mb-5">
-          <h2 className="text-base font-semibold text-gray-800">
+          <h2 className="text-base font-semibold text-gray-800 dark:text-gray-200">
             {targetPageId ? 'Import rows from spreadsheet' : 'Import spreadsheet as database'}
           </h2>
-          <button onClick={onClose} className="p-1 rounded hover:bg-gray-100 text-gray-400">
+          <button onClick={onClose} className="p-1 rounded hover:bg-gray-100 dark:hover:bg-gray-800 text-gray-400 dark:text-gray-500">
             <X size={16} />
           </button>
         </div>
 
-        <p className="text-sm text-gray-500 mb-4">
+        <p className="text-sm text-gray-500 dark:text-gray-400 mb-4">
           {targetPageId
             ? 'Upload an Excel or CSV file. The first row is treated as column headers and matched to existing properties by name; new columns are created for anything that doesn’t match.'
             : 'Upload an Excel (.xlsx) or CSV file. The first row is treated as column headers, and a new database will be created with one row per remaining line.'}
@@ -109,20 +109,20 @@ export function SpreadsheetImportModal({ onClose, targetPageId, parentPageId, on
             onDrop={handleDrop}
             onClick={() => fileRef.current?.click()}
             className={`border-2 border-dashed rounded-lg p-8 text-center cursor-pointer transition-colors ${
-              dragging ? 'border-blue-400 bg-blue-50' : 'border-gray-200 hover:border-gray-400 hover:bg-gray-50'
+              dragging ? 'border-blue-400 bg-blue-50 dark:bg-blue-950/30' : 'border-gray-200 dark:border-gray-700 hover:border-gray-400 dark:hover:border-gray-500 hover:bg-gray-50 dark:hover:bg-gray-800'
             }`}
           >
             <input ref={fileRef} type="file" accept=".xlsx,.xls,.csv" className="hidden" onChange={handleFile} />
             {uploading ? (
               <div className="flex flex-col items-center gap-2">
-                <div className="w-6 h-6 border-2 border-gray-300 border-t-blue-600 rounded-full animate-spin" />
-                <p className="text-sm text-gray-500">Importing…</p>
+                <div className="w-6 h-6 border-2 border-gray-300 dark:border-gray-600 border-t-blue-600 rounded-full animate-spin" />
+                <p className="text-sm text-gray-500 dark:text-gray-400">Importing…</p>
               </div>
             ) : (
               <div className="flex flex-col items-center gap-2">
-                <Upload size={24} className="text-gray-400" />
-                <p className="text-sm font-medium text-gray-700">Drop your spreadsheet here</p>
-                <p className="text-xs text-gray-400">or click to browse</p>
+                <Upload size={24} className="text-gray-400 dark:text-gray-500" />
+                <p className="text-sm font-medium text-gray-700 dark:text-gray-300">Drop your spreadsheet here</p>
+                <p className="text-xs text-gray-400 dark:text-gray-500">or click to browse</p>
               </div>
             )}
           </div>
@@ -130,7 +130,7 @@ export function SpreadsheetImportModal({ onClose, targetPageId, parentPageId, on
 
         {/* Error */}
         {error && (
-          <div className="mt-4 flex items-start gap-2 text-sm text-red-600 bg-red-50 rounded-lg p-3">
+          <div className="mt-4 flex items-start gap-2 text-sm text-red-600 dark:text-red-400 bg-red-50 dark:bg-red-950/40 rounded-lg p-3">
             <AlertCircle size={15} className="flex-shrink-0 mt-0.5" />
             <span>{error}</span>
           </div>
@@ -139,11 +139,11 @@ export function SpreadsheetImportModal({ onClose, targetPageId, parentPageId, on
         {/* Result */}
         {result && (
           <div className="mt-2 space-y-3">
-            <div className="flex items-start gap-2 text-sm text-green-700 bg-green-50 rounded-lg p-4">
+            <div className="flex items-start gap-2 text-sm text-green-700 dark:text-green-300 bg-green-50 dark:bg-green-950/40 rounded-lg p-4">
               <CheckCircle2 size={16} className="flex-shrink-0 mt-0.5" />
               <div>
                 <p className="font-medium">Import complete</p>
-                <p className="text-xs text-green-600 mt-0.5">
+                <p className="text-xs text-green-600 dark:text-green-400 mt-0.5">
                   {result.rowsCreated} row{result.rowsCreated !== 1 ? 's' : ''} imported
                   {'columnsAdded' in result && result.columnsAdded > 0
                     ? ` · ${result.columnsAdded} new column${result.columnsAdded !== 1 ? 's' : ''}`
@@ -153,7 +153,7 @@ export function SpreadsheetImportModal({ onClose, targetPageId, parentPageId, on
             </div>
             <button
               onClick={onClose}
-              className="w-full py-2 text-sm bg-gray-900 text-white rounded-lg hover:bg-gray-700 transition-colors"
+              className="w-full py-2 text-sm bg-gray-900 text-white rounded-lg hover:bg-gray-700 dark:bg-gray-100 dark:text-gray-900 dark:hover:bg-gray-300 transition-colors"
             >
               Done
             </button>

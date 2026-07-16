@@ -47,12 +47,12 @@ export const SlashCommandMenu = forwardRef<SlashCommandMenuHandle, Props>(
             onClick={() => command(item)}
             onMouseEnter={() => setSelected(i)}
           >
-            <span className="w-7 h-7 flex items-center justify-center text-xs font-mono bg-gray-100 rounded text-gray-600 flex-shrink-0">
+            <span className="w-7 h-7 flex items-center justify-center text-xs font-mono bg-gray-100 dark:bg-gray-700 rounded text-gray-600 dark:text-gray-300 flex-shrink-0">
               {item.icon}
             </span>
             <span>
-              <div className="font-medium text-gray-800">{item.title}</div>
-              <div className="text-xs text-gray-400">{item.description}</div>
+              <div className="font-medium text-gray-800 dark:text-gray-200">{item.title}</div>
+              <div className="text-xs text-gray-400 dark:text-gray-500">{item.description}</div>
             </span>
           </button>
         ))}
