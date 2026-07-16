@@ -20,7 +20,7 @@ import { SlashCommandMenu, type SlashCommandMenuHandle } from './SlashCommandMen
 import { BubbleMenuBar } from './BubbleMenuBar'
 import { api } from '@/lib/api'
 import { useSidebarStore } from '@/store/sidebar'
-import { usePageSync } from '@/hooks/usePageSync'
+import { usePageSync, type PageMeta } from '@/hooks/usePageSync'
 
 import 'tippy.js/dist/tippy.css'
 
@@ -36,11 +36,12 @@ interface EditorProps {
   initialContent: unknown
   onChange: (content: unknown) => void
   onNavigate?: (url: string) => void
+  onRemoteMeta?: (meta: PageMeta) => void
   readOnly?: boolean
 }
 
 export const Editor = forwardRef<EditorHandle, EditorProps>(function Editor(
-  { pageId, initialContent, onChange, onNavigate, readOnly = false },
+  { pageId, initialContent, onChange, onNavigate, onRemoteMeta, readOnly = false },
   ref,
 ) {
   const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
@@ -144,7 +145,7 @@ export const Editor = forwardRef<EditorHandle, EditorProps>(function Editor(
     },
   })
 
-  const { sendContent } = usePageSync(pageId, editor)
+  const { sendContent } = usePageSync(pageId, editor, onRemoteMeta)
 
   useImperativeHandle(ref, () => ({
     getMarkdown: () => editor?.storage.markdown.getMarkdown() ?? '',

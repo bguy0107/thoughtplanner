@@ -72,6 +72,14 @@ export default function PageView({ params }: { params: Promise<{ id: string }> }
     await api.pages.update(id, { coverImage: null })
   }, [id])
 
+  const handleRemoteMeta = useCallback(
+    (meta: { title?: string; icon?: string | null }) => {
+      setPage((p) => (p ? { ...p, ...(meta.title !== undefined ? { title: meta.title } : {}), ...(meta.icon !== undefined ? { icon: meta.icon } : {}) } : p))
+      updatePage(id, meta)
+    },
+    [id, updatePage],
+  )
+
   const handleTogglePublic = useCallback(async () => {
     if (!page) return
     const isPublic = !page.isPublic
@@ -222,6 +230,7 @@ export default function PageView({ params }: { params: Promise<{ id: string }> }
           initialContent={page.content}
           onChange={handleContentChange}
           onNavigate={router.push}
+          onRemoteMeta={handleRemoteMeta}
         />
       </div>
     </div>

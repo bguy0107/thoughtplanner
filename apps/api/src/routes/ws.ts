@@ -2,6 +2,7 @@ import type { FastifyInstance, FastifyRequest } from 'fastify'
 import { prisma } from '../lib/prisma.js'
 import { auth } from '../lib/auth.js'
 import { wsJoin, wsLeave, wsBroadcast } from '../lib/wsHub.js'
+import { isViewer } from '../lib/permissions.js'
 
 async function getSession(req: FastifyRequest) {
   return auth.api.getSession({ headers: req.headers as unknown as Headers })
@@ -30,7 +31,7 @@ export async function wsRoutes(app: FastifyInstance) {
         try {
           const msg = JSON.parse(raw.toString())
 
-          if (msg.type === 'page:content' && msg.pageId === pageId) {
+          if (msg.type === 'page:content' && msg.pageId === pageId && !isViewer(session.user)) {
             await prisma.page.update({
               where: { id: pageId },
               data: { content: msg.content, updatedById: session.user.id },

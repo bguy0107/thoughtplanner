@@ -1,9 +1,11 @@
 import { randomUUID } from 'crypto'
 import type { FastifyInstance, FastifyRequest } from 'fastify'
+import { Prisma } from '@prisma/client'
 import { z } from 'zod'
 import { prisma } from '../lib/prisma.js'
 import { auth } from '../lib/auth.js'
 import { wsBroadcast } from '../lib/wsHub.js'
+import { isViewer } from '../lib/permissions.js'
 
 async function getSession(req: FastifyRequest) {
   return auth.api.getSession({ headers: req.headers as unknown as Headers })
@@ -69,6 +71,7 @@ export async function pageRoutes(app: FastifyInstance) {
   app.post('/api/pages', async (req, reply) => {
     const session = await getSession(req)
     if (!session) return reply.status(401).send({ error: 'Unauthorized' })
+    if (isViewer(session.user)) return reply.status(403).send({ error: 'Viewers cannot create pages' })
 
     const body = CreatePageSchema.safeParse(req.body)
     if (!body.success) return reply.status(400).send({ error: body.error.flatten() })
@@ -107,14 +110,20 @@ export async function pageRoutes(app: FastifyInstance) {
   app.patch<{ Params: { id: string } }>('/api/pages/:id', async (req, reply) => {
     const session = await getSession(req)
     if (!session) return reply.status(401).send({ error: 'Unauthorized' })
+    if (isViewer(session.user)) return reply.status(403).send({ error: 'Viewers cannot edit pages' })
 
     const body = UpdatePageSchema.safeParse(req.body)
     if (!body.success) return reply.status(400).send({ error: body.error.flatten() })
 
+    const { content, ...rest } = body.data
+
     const page = await prisma.page.update({
       where: { id: req.params.id },
       data: {
-        ...body.data,
+        ...rest,
+        ...(content !== undefined
+          ? { content: (content === null ? Prisma.JsonNull : content) as Prisma.InputJsonValue }
+          : {}),
         updatedById: session.user.id,
       },
     })
@@ -131,15 +140,22 @@ export async function pageRoutes(app: FastifyInstance) {
     return page
   })
 
-  // DELETE /api/pages/:id — archive (soft delete)
+  // DELETE /api/pages/:id — archive (soft delete), cascading to all descendant pages
   app.delete<{ Params: { id: string } }>('/api/pages/:id', async (req, reply) => {
     const session = await getSession(req)
     if (!session) return reply.status(401).send({ error: 'Unauthorized' })
+    if (isViewer(session.user)) return reply.status(403).send({ error: 'Viewers cannot delete pages' })
 
-    await prisma.page.update({
-      where: { id: req.params.id },
-      data: { isArchived: true, updatedById: session.user.id },
-    })
+    await prisma.$executeRaw`
+      WITH RECURSIVE descendants AS (
+        SELECT id FROM "Page" WHERE id = ${req.params.id}
+        UNION ALL
+        SELECT p.id FROM "Page" p INNER JOIN descendants d ON p."parentPageId" = d.id
+      )
+      UPDATE "Page"
+      SET "isArchived" = true, "updatedById" = ${session.user.id}, "updatedAt" = now()
+      WHERE id IN (SELECT id FROM descendants)
+    `
 
     return reply.status(204).send()
   })

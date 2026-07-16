@@ -1,7 +1,9 @@
 import type { FastifyInstance, FastifyRequest } from 'fastify'
+import type { Prisma } from '@prisma/client'
 import { z } from 'zod'
 import { prisma } from '../lib/prisma.js'
 import { auth } from '../lib/auth.js'
+import { isViewer } from '../lib/permissions.js'
 
 async function getSession(req: FastifyRequest) {
   return auth.api.getSession({ headers: req.headers as unknown as Headers })
@@ -123,6 +125,7 @@ export async function databaseRoutes(app: FastifyInstance) {
   app.patch<{ Params: { pageId: string } }>('/api/databases/:pageId/schema', async (req, reply) => {
     const session = await getSession(req)
     if (!session) return reply.status(401).send({ error: 'Unauthorized' })
+    if (isViewer(session.user)) return reply.status(403).send({ error: 'Viewers cannot edit the schema' })
 
     const body = UpdateSchemaBodySchema.safeParse(req.body)
     if (!body.success) return reply.status(400).send({ error: body.error.flatten() })
@@ -139,6 +142,7 @@ export async function databaseRoutes(app: FastifyInstance) {
   app.post<{ Params: { pageId: string } }>('/api/databases/:pageId/rows', async (req, reply) => {
     const session = await getSession(req)
     if (!session) return reply.status(401).send({ error: 'Unauthorized' })
+    if (isViewer(session.user)) return reply.status(403).send({ error: 'Viewers cannot create rows' })
 
     const body = CreateRowBodySchema.safeParse(req.body)
     if (!body.success) return reply.status(400).send({ error: body.error.flatten() })
@@ -147,7 +151,11 @@ export async function databaseRoutes(app: FastifyInstance) {
     if (!schema) return reply.status(404).send({ error: 'No schema' })
 
     const row = await prisma.databaseRow.create({
-      data: { pageId: req.params.pageId, schemaId: schema.id, properties: body.data.properties },
+      data: {
+        pageId: req.params.pageId,
+        schemaId: schema.id,
+        properties: body.data.properties as Prisma.InputJsonValue,
+      },
     })
 
     return reply.status(201).send(row)
@@ -157,13 +165,14 @@ export async function databaseRoutes(app: FastifyInstance) {
   app.patch<{ Params: { rowId: string } }>('/api/databases/rows/:rowId', async (req, reply) => {
     const session = await getSession(req)
     if (!session) return reply.status(401).send({ error: 'Unauthorized' })
+    if (isViewer(session.user)) return reply.status(403).send({ error: 'Viewers cannot edit rows' })
 
     const body = UpdateRowBodySchema.safeParse(req.body)
     if (!body.success) return reply.status(400).send({ error: body.error.flatten() })
 
     const row = await prisma.databaseRow.update({
       where: { id: req.params.rowId },
-      data: { properties: body.data.properties },
+      data: { properties: body.data.properties as Prisma.InputJsonValue },
     })
 
     return row
@@ -173,6 +182,7 @@ export async function databaseRoutes(app: FastifyInstance) {
   app.delete<{ Params: { rowId: string } }>('/api/databases/rows/:rowId', async (req, reply) => {
     const session = await getSession(req)
     if (!session) return reply.status(401).send({ error: 'Unauthorized' })
+    if (isViewer(session.user)) return reply.status(403).send({ error: 'Viewers cannot delete rows' })
 
     await prisma.databaseRow.delete({ where: { id: req.params.rowId } })
     return reply.status(204).send()

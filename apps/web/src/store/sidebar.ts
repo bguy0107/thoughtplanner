@@ -49,7 +49,22 @@ export const useSidebarStore = create<SidebarStore>((set, get) => ({
     })),
 
   removePage: (id) =>
-    set((s) => ({ pages: s.pages.filter((p) => p.id !== id) })),
+    set((s) => {
+      // The server cascades archival to descendants too, so drop them from local
+      // state as well — otherwise they'd linger, unreachable, under a removed parent.
+      const toRemove = new Set([id])
+      let grew = true
+      while (grew) {
+        grew = false
+        for (const p of s.pages) {
+          if (p.parentPageId && toRemove.has(p.parentPageId) && !toRemove.has(p.id)) {
+            toRemove.add(p.id)
+            grew = true
+          }
+        }
+      }
+      return { pages: s.pages.filter((p) => !toRemove.has(p.id)) }
+    }),
 
   toggleCollapsed: () => set((s) => ({ collapsed: !s.collapsed })),
 }))

@@ -1,9 +1,11 @@
 import { randomUUID } from 'crypto'
 import type { FastifyInstance, FastifyRequest } from 'fastify'
+import { Prisma } from '@prisma/client'
 import AdmZip from 'adm-zip'
 import Papa from 'papaparse'
 import { prisma } from '../lib/prisma.js'
 import { auth } from '../lib/auth.js'
+import { isViewer } from '../lib/permissions.js'
 
 async function getSession(req: FastifyRequest) {
   return auth.api.getSession({ headers: req.headers as unknown as Headers })
@@ -68,6 +70,7 @@ export async function importRoutes(app: FastifyInstance) {
   app.post('/api/import/notion', async (req, reply) => {
     const session = await getSession(req)
     if (!session) return reply.status(401).send({ error: 'Unauthorized' })
+    if (isViewer(session.user)) return reply.status(403).send({ error: 'Viewers cannot import content' })
 
     const data = await req.file()
     if (!data) return reply.status(400).send({ error: 'No file uploaded' })
@@ -127,7 +130,7 @@ export async function importRoutes(app: FastifyInstance) {
         const page = await prisma.page.create({
           data: {
             title,
-            content: body ? markdownToTiptap(body) : null,
+            content: body ? (markdownToTiptap(body) as Prisma.InputJsonValue) : Prisma.JsonNull,
             isDatabase: hasMatchingCsv,
             position,
             createdById: session.user.id,
@@ -176,7 +179,7 @@ export async function importRoutes(app: FastifyInstance) {
             properties[col.id] = castValue(rowData[col.name] ?? '', col.type)
           }
           await prisma.databaseRow.create({
-            data: { pageId, schemaId: schema.id, properties },
+            data: { pageId, schemaId: schema.id, properties: properties as Prisma.InputJsonValue },
           })
         }
 

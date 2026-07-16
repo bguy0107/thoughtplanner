@@ -14,8 +14,11 @@ export function middleware(req: NextRequest) {
     return NextResponse.next()
   }
 
-  // Better Auth sets a cookie named 'better-auth.session_token'
-  const session = req.cookies.get('better-auth.session_token')
+  // Better Auth names this cookie 'better-auth.session_token', but prefixes it with
+  // '__Secure-' whenever the app runs in production or behind HTTPS.
+  const session =
+    req.cookies.get('better-auth.session_token') ??
+    req.cookies.get('__Secure-better-auth.session_token')
   if (!session) {
     return NextResponse.redirect(new URL('/login', req.url))
   }
