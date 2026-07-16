@@ -1,13 +1,14 @@
 'use client'
 
 import { useCallback, useEffect, useState } from 'react'
-import { LayoutList, Columns3, LayoutGrid, CalendarDays, Settings2 } from 'lucide-react'
+import { LayoutList, Columns3, LayoutGrid, CalendarDays, Settings2, FileSpreadsheet } from 'lucide-react'
 import { api, type Column, type DbSchema, type Page } from '@/lib/api'
 import { TableView } from './TableView'
 import { BoardView } from './BoardView'
 import { GalleryView } from './GalleryView'
 import { CalendarView } from './CalendarView'
 import { SchemaBuilder } from './SchemaBuilder'
+import { SpreadsheetImportModal } from '@/components/SpreadsheetImportModal'
 
 type ViewMode = 'table' | 'board' | 'gallery' | 'calendar'
 
@@ -20,8 +21,14 @@ export function DatabaseView({ page, onTitleChange }: Props) {
   const [schema, setSchema] = useState<DbSchema | null>(null)
   const [view, setView] = useState<ViewMode>('table')
   const [showSchema, setShowSchema] = useState(false)
+  const [showImport, setShowImport] = useState(false)
 
   useEffect(() => {
+    api.databases.get(page.id).then(setSchema)
+  }, [page.id])
+
+  const handleImported = useCallback(() => {
+    setShowImport(false)
     api.databases.get(page.id).then(setSchema)
   }, [page.id])
 
@@ -89,6 +96,13 @@ export function DatabaseView({ page, onTitleChange }: Props) {
             ))}
             <div className="flex-1" />
             <button
+              onClick={() => setShowImport(true)}
+              className="flex items-center gap-1.5 px-3 py-2 text-sm rounded transition-colors mb-1 text-gray-500 hover:text-gray-700 hover:bg-gray-100"
+            >
+              <FileSpreadsheet size={14} />
+              Import
+            </button>
+            <button
               onClick={() => setShowSchema((s) => !s)}
               className={`flex items-center gap-1.5 px-3 py-2 text-sm rounded transition-colors mb-1 ${
                 showSchema
@@ -152,6 +166,14 @@ export function DatabaseView({ page, onTitleChange }: Props) {
           />
         )}
       </div>
+
+      {showImport && (
+        <SpreadsheetImportModal
+          targetPageId={page.id}
+          onClose={() => setShowImport(false)}
+          onImported={handleImported}
+        />
+      )}
     </div>
   )
 }

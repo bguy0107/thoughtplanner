@@ -2,12 +2,13 @@
 
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
-import { Plus, PanelLeftClose, Table2, Search, Settings, FileDown } from 'lucide-react'
+import { Plus, PanelLeftClose, Table2, Search, Settings, FileDown, FileSpreadsheet } from 'lucide-react'
 import { signOut, useSession } from '@/lib/auth-client'
 import { useSidebarStore } from '@/store/sidebar'
 import { PageTree } from './PageTree'
 import { SearchModal } from '@/components/SearchModal'
 import { NotionImportModal } from '@/components/NotionImportModal'
+import { SpreadsheetImportModal } from '@/components/SpreadsheetImportModal'
 
 export function Sidebar({ onClose }: { onClose?: () => void }) {
   const router = useRouter()
@@ -15,6 +16,7 @@ export function Sidebar({ onClose }: { onClose?: () => void }) {
   const { addPage, addDatabase, toggleCollapsed, fetchPages } = useSidebarStore()
   const [searchOpen, setSearchOpen] = useState(false)
   const [importOpen, setImportOpen] = useState(false)
+  const [spreadsheetImportOpen, setSpreadsheetImportOpen] = useState(false)
 
   async function handleNewPage() {
     const page = await addPage()
@@ -94,6 +96,13 @@ export function Sidebar({ onClose }: { onClose?: () => void }) {
             Import from Notion
           </button>
           <button
+            onClick={() => setSpreadsheetImportOpen(true)}
+            className="w-full flex items-center gap-2 px-3 py-1.5 text-sm text-gray-400 rounded hover:bg-[#ebebea] transition-colors"
+          >
+            <FileSpreadsheet size={15} />
+            Import spreadsheet
+          </button>
+          <button
             onClick={() => { router.push('/settings'); onClose?.() }}
             className="w-full flex items-center gap-2 px-3 py-1.5 text-sm text-gray-400 rounded hover:bg-[#ebebea] transition-colors"
           >
@@ -114,6 +123,16 @@ export function Sidebar({ onClose }: { onClose?: () => void }) {
         <NotionImportModal
           onClose={() => setImportOpen(false)}
           onImported={() => fetchPages()}
+        />
+      )}
+      {spreadsheetImportOpen && (
+        <SpreadsheetImportModal
+          onClose={() => setSpreadsheetImportOpen(false)}
+          onImported={(pageId) => {
+            fetchPages()
+            router.push(`/page/${pageId}`)
+            onClose?.()
+          }}
         />
       )}
     </>
