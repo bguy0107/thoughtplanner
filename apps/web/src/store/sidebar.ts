@@ -5,10 +5,10 @@ interface SidebarStore {
   pages: PageSummary[]
   loading: boolean
   collapsed: boolean
-  fetchPages: () => Promise<void>
+  fetchPages: (workspaceId?: string) => Promise<void>
   setPages: (pages: PageSummary[]) => void
-  addPage: (parentPageId?: string) => Promise<PageSummary>
-  addDatabase: (parentPageId?: string) => Promise<PageSummary>
+  addPage: (workspaceId: string, parentPageId?: string) => Promise<PageSummary>
+  addDatabase: (workspaceId: string, parentPageId?: string) => Promise<PageSummary>
   updatePage: (id: string, data: Partial<PageSummary>) => void
   removePage: (id: string) => void
   toggleCollapsed: () => void
@@ -19,10 +19,11 @@ export const useSidebarStore = create<SidebarStore>((set, get) => ({
   loading: false,
   collapsed: false,
 
-  fetchPages: async () => {
+  fetchPages: async (workspaceId) => {
+    if (!workspaceId) { set({ pages: [] }); return }
     set({ loading: true })
     try {
-      const pages = await api.pages.list()
+      const pages = await api.pages.list(workspaceId)
       set({ pages, loading: false })
     } catch {
       set({ loading: false })
@@ -31,14 +32,14 @@ export const useSidebarStore = create<SidebarStore>((set, get) => ({
 
   setPages: (pages) => set({ pages }),
 
-  addPage: async (parentPageId) => {
-    const page = await api.pages.create({ parentPageId, title: 'Untitled' })
+  addPage: async (workspaceId, parentPageId) => {
+    const page = await api.pages.create({ workspaceId, parentPageId, title: 'Untitled' })
     set((s) => ({ pages: [...s.pages, page] }))
     return page
   },
 
-  addDatabase: async (parentPageId) => {
-    const page = await api.pages.create({ parentPageId, title: 'Untitled', isDatabase: true })
+  addDatabase: async (workspaceId, parentPageId) => {
+    const page = await api.pages.create({ workspaceId, parentPageId, title: 'Untitled', isDatabase: true })
     set((s) => ({ pages: [...s.pages, page] }))
     return page
   },

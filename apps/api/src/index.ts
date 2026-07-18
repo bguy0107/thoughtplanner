@@ -16,6 +16,7 @@ import { v1Routes } from './routes/v1.js'
 import { importRoutes } from './routes/import.js'
 import { inviteRoutes } from './routes/invites.js'
 import { adminRoutes } from './routes/admin.js'
+import { workspaceRoutes } from './routes/workspaces.js'
 import { ensureBucket } from './lib/minio.js'
 
 if (
@@ -58,6 +59,7 @@ await app.register(v1Routes)
 await app.register(importRoutes)
 await app.register(inviteRoutes)
 await app.register(adminRoutes)
+await app.register(workspaceRoutes)
 
 app.get('/health', async () => ({ status: 'ok' }))
 

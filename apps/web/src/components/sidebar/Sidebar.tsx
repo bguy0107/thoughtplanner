@@ -6,29 +6,34 @@ import { Plus, PanelLeftClose, Table2, Search, Settings, FileDown, FileSpreadshe
 import { signOut, useSession } from '@/lib/auth-client'
 import { useSidebarStore, buildPageTree } from '@/store/sidebar'
 import { PageTree } from './PageTree'
+import { WorkspaceSwitcher } from './WorkspaceSwitcher'
 import { SearchModal } from '@/components/SearchModal'
 import { NotionImportModal } from '@/components/NotionImportModal'
 import { SpreadsheetImportModal } from '@/components/SpreadsheetImportModal'
 import { ThemeToggle } from '@/components/ThemeToggle'
+import { useWorkspaceStore } from '@/store/workspace'
 
 export function Sidebar({ onClose }: { onClose?: () => void }) {
   const router = useRouter()
   const { data: session } = useSession()
   const { addPage, addDatabase, toggleCollapsed, fetchPages } = useSidebarStore()
   const pages = useSidebarStore((s) => s.pages)
+  const currentWorkspaceId = useWorkspaceStore((s) => s.currentWorkspaceId)
   const tree = useMemo(() => buildPageTree(pages), [pages])
   const [searchOpen, setSearchOpen] = useState(false)
   const [importOpen, setImportOpen] = useState(false)
   const [spreadsheetImportOpen, setSpreadsheetImportOpen] = useState(false)
 
   async function handleNewPage() {
-    const page = await addPage()
+    if (!currentWorkspaceId) return
+    const page = await addPage(currentWorkspaceId)
     router.push(`/page/${page.id}`)
     onClose?.()
   }
 
   async function handleNewDatabase() {
-    const page = await addDatabase()
+    if (!currentWorkspaceId) return
+    const page = await addDatabase(currentWorkspaceId)
     router.push(`/page/${page.id}`)
     onClose?.()
   }
@@ -47,13 +52,11 @@ export function Sidebar({ onClose }: { onClose?: () => void }) {
     <>
       <aside className="w-60 flex-shrink-0 bg-[#f7f7f5] dark:bg-sidebar-dark-bg border-r border-gray-200 dark:border-gray-800 flex flex-col h-full select-none">
         {/* Header */}
-        <div className="flex items-center justify-between px-3 py-3 border-b border-gray-200 dark:border-gray-800">
-          <span className="text-sm font-semibold text-gray-700 dark:text-sidebar-dark-text truncate">
-            {session?.user.name ?? 'Thoughtplanner'}
-          </span>
+        <div className="flex items-center gap-1 px-2 py-2 border-b border-gray-200 dark:border-gray-800">
+          <WorkspaceSwitcher accountName={session?.user.name} />
           <button
             onClick={handleCollapse}
-            className="p-1 rounded hover:bg-[#ebebea] dark:hover:bg-sidebar-dark-hover text-gray-400 dark:text-sidebar-dark-muted hover:text-gray-600 dark:hover:text-sidebar-dark-text transition-colors"
+            className="flex-shrink-0 p-1 rounded hover:bg-[#ebebea] dark:hover:bg-sidebar-dark-hover text-gray-400 dark:text-sidebar-dark-muted hover:text-gray-600 dark:hover:text-sidebar-dark-text transition-colors"
             title="Collapse sidebar"
           >
             <PanelLeftClose size={16} />
@@ -125,17 +128,19 @@ export function Sidebar({ onClose }: { onClose?: () => void }) {
       </aside>
 
       {searchOpen && <SearchModal onClose={() => setSearchOpen(false)} />}
-      {importOpen && (
+      {importOpen && currentWorkspaceId && (
         <NotionImportModal
+          workspaceId={currentWorkspaceId}
           onClose={() => setImportOpen(false)}
-          onImported={() => fetchPages()}
+          onImported={() => fetchPages(currentWorkspaceId)}
         />
       )}
-      {spreadsheetImportOpen && (
+      {spreadsheetImportOpen && currentWorkspaceId && (
         <SpreadsheetImportModal
+          workspaceId={currentWorkspaceId}
           onClose={() => setSpreadsheetImportOpen(false)}
           onImported={(pageId) => {
-            fetchPages()
+            fetchPages(currentWorkspaceId)
             router.push(`/page/${pageId}`)
             onClose?.()
           }}

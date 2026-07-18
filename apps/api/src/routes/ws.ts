@@ -2,7 +2,7 @@ import type { FastifyInstance, FastifyRequest } from 'fastify'
 import { prisma } from '../lib/prisma.js'
 import { auth } from '../lib/auth.js'
 import { wsJoin, wsLeave, wsBroadcast } from '../lib/wsHub.js'
-import { isViewer } from '../lib/permissions.js'
+import { requirePageAccess, hasWorkspaceRole } from '../lib/workspace.js'
 
 async function getSession(req: FastifyRequest) {
   return auth.api.getSession({ headers: req.headers as unknown as Headers })
@@ -25,13 +25,20 @@ export async function wsRoutes(app: FastifyInstance) {
         return
       }
 
+      const access = await requirePageAccess(session.user.id, pageId)
+      if (!access.ok) {
+        socket.close(1008, 'Forbidden')
+        return
+      }
+      const canEdit = hasWorkspaceRole(access.membership.role, 'EDITOR')
+
       wsJoin(pageId, socket)
 
       socket.on('message', async (raw: Buffer) => {
         try {
           const msg = JSON.parse(raw.toString())
 
-          if (msg.type === 'page:content' && msg.pageId === pageId && !isViewer(session.user)) {
+          if (msg.type === 'page:content' && msg.pageId === pageId && canEdit) {
             await prisma.page.update({
               where: { id: pageId },
               data: { content: msg.content, updatedById: session.user.id },

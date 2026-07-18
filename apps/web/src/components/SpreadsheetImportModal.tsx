@@ -22,10 +22,12 @@ interface Props {
   targetPageId?: string
   /** Only used when creating a new database page. */
   parentPageId?: string
+  /** Required unless targetPageId is set (workspace is then derived from the target page). */
+  workspaceId?: string
   onImported: (pageId: string) => void
 }
 
-export function SpreadsheetImportModal({ onClose, targetPageId, parentPageId, onImported }: Props) {
+export function SpreadsheetImportModal({ onClose, targetPageId, parentPageId, workspaceId, onImported }: Props) {
   const [dragging, setDragging] = useState(false)
   const [uploading, setUploading] = useState(false)
   const [result, setResult] = useState<NewDatabaseResult | AppendResult | null>(null)
@@ -45,8 +47,12 @@ export function SpreadsheetImportModal({ onClose, targetPageId, parentPageId, on
     try {
       const form = new FormData()
       // Fields must precede the file part so the server can read them before streaming the file.
-      if (targetPageId) form.append('pageId', targetPageId)
-      else if (parentPageId) form.append('parentPageId', parentPageId)
+      if (targetPageId) {
+        form.append('pageId', targetPageId)
+      } else {
+        if (workspaceId) form.append('workspaceId', workspaceId)
+        if (parentPageId) form.append('parentPageId', parentPageId)
+      }
       form.append('file', file)
 
       const res = await fetch(`${API}/api/import/spreadsheet`, {

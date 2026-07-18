@@ -8,16 +8,26 @@ import { useSession } from '@/lib/auth-client'
 import { UsersPanel } from '@/components/settings/UsersPanel'
 import { PagesPanel } from '@/components/settings/PagesPanel'
 import { DatabasesPanel } from '@/components/settings/DatabasesPanel'
+import { WorkspacePanel } from '@/components/settings/WorkspacePanel'
+import { WorkspaceMembersPanel } from '@/components/settings/WorkspaceMembersPanel'
+import { useWorkspaceStore } from '@/store/workspace'
 
-type Tab = 'general' | 'users' | 'pages' | 'databases'
+type Tab = 'general' | 'workspace' | 'members' | 'users' | 'pages' | 'databases'
 
 export default function SettingsPage() {
   const { data: session } = useSession()
   const isAdmin = session?.user.role === 'ADMIN'
+  const isWorkspaceAdmin = useWorkspaceStore((s) => s.currentRole()) === 'ADMIN'
   const [tab, setTab] = useState<Tab>('general')
 
   const tabs: { id: Tab; label: string }[] = [
     { id: 'general', label: 'General' },
+    ...(isWorkspaceAdmin
+      ? ([
+          { id: 'workspace', label: 'Workspace' },
+          { id: 'members', label: 'Members' },
+        ] as const)
+      : []),
     ...(isAdmin
       ? ([
           { id: 'users', label: 'Users' },
@@ -48,6 +58,8 @@ export default function SettingsPage() {
       </div>
 
       {tab === 'general' && <GeneralSettings />}
+      {tab === 'workspace' && isWorkspaceAdmin && <WorkspacePanel />}
+      {tab === 'members' && isWorkspaceAdmin && <WorkspaceMembersPanel />}
       {tab === 'users' && isAdmin && <UsersPanel />}
       {tab === 'pages' && isAdmin && <PagesPanel />}
       {tab === 'databases' && isAdmin && <DatabasesPanel />}

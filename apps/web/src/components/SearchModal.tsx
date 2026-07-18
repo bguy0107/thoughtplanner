@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation'
 import { Search, FileText, Table2, X } from 'lucide-react'
 import { api } from '@/lib/api'
 import { cn } from '@/lib/utils'
+import { useWorkspaceStore } from '@/store/workspace'
 
 interface SearchResult {
   id: string
@@ -19,6 +20,7 @@ interface SearchModalProps {
 
 export function SearchModal({ onClose }: SearchModalProps) {
   const router = useRouter()
+  const currentWorkspaceId = useWorkspaceStore((s) => s.currentWorkspaceId)
   const [query, setQuery] = useState('')
   const [results, setResults] = useState<SearchResult[]>([])
   const [loading, setLoading] = useState(false)
@@ -32,12 +34,12 @@ export function SearchModal({ onClose }: SearchModalProps) {
 
   useEffect(() => {
     if (debounceRef.current) clearTimeout(debounceRef.current)
-    if (!query.trim()) { setResults([]); return }
+    if (!query.trim() || !currentWorkspaceId) { setResults([]); return }
 
     setLoading(true)
     debounceRef.current = setTimeout(async () => {
       try {
-        const data = await api.search(query)
+        const data = await api.search(query, currentWorkspaceId)
         setResults(data)
         setActiveIndex(0)
       } finally {
@@ -46,7 +48,7 @@ export function SearchModal({ onClose }: SearchModalProps) {
     }, 200)
 
     return () => { if (debounceRef.current) clearTimeout(debounceRef.current) }
-  }, [query])
+  }, [query, currentWorkspaceId])
 
   const navigate = useCallback((id: string) => {
     router.push(`/page/${id}`)

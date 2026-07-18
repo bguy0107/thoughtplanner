@@ -2,6 +2,7 @@ import type { FastifyInstance, FastifyRequest } from 'fastify'
 import { prisma } from '../lib/prisma.js'
 import { auth } from '../lib/auth.js'
 import { getApiKeyUser } from '../lib/apiKeyAuth.js'
+import { requirePageAccess, requireWorkspaceMember } from '../lib/workspace.js'
 
 async function resolveUser(req: FastifyRequest) {
   const apiKeyUser = await getApiKeyUser(req)
@@ -61,13 +62,28 @@ function nodeToMd(node: Node): string {
 }
 
 export async function v1Routes(app: FastifyInstance) {
-  // GET /api/v1/pages — list non-archived pages
-  app.get('/api/v1/pages', async (req, reply) => {
+  // GET /api/v1/pages?workspaceId= — list non-archived pages
+  app.get<{ Querystring: { workspaceId?: string } }>('/api/v1/pages', async (req, reply) => {
     const user = await resolveUser(req)
     if (!user) return reply.status(401).send({ error: 'Unauthorized' })
 
+    const { workspaceId } = req.query
+
+    let where: { isArchived: boolean; workspaceId: string | { in: string[] } }
+    if (workspaceId) {
+      const access = await requireWorkspaceMember(user.id, workspaceId)
+      if (!access.ok) return reply.status(access.status).send({ error: access.error })
+      where = { isArchived: false, workspaceId }
+    } else {
+      const memberships = await prisma.workspaceMember.findMany({
+        where: { userId: user.id },
+        select: { workspaceId: true },
+      })
+      where = { isArchived: false, workspaceId: { in: memberships.map((m) => m.workspaceId) } }
+    }
+
     const pages = await prisma.page.findMany({
-      where: { isArchived: false },
+      where,
       select: { id: true, parentPageId: true, title: true, icon: true, isDatabase: true, position: true, updatedAt: true },
       orderBy: { position: 'asc' },
     })
@@ -80,6 +96,9 @@ export async function v1Routes(app: FastifyInstance) {
     const user = await resolveUser(req)
     if (!user) return reply.status(401).send({ error: 'Unauthorized' })
 
+    const access = await requirePageAccess(user.id, req.params.id)
+    if (!access.ok) return reply.status(access.status).send({ error: access.error })
+
     const page = await prisma.page.findUnique({ where: { id: req.params.id } })
     if (!page) return reply.status(404).send({ error: 'Not found' })
 
@@ -90,6 +109,9 @@ export async function v1Routes(app: FastifyInstance) {
   app.get<{ Params: { id: string } }>('/api/v1/pages/:id/markdown', async (req, reply) => {
     const user = await resolveUser(req)
     if (!user) return reply.status(401).send({ error: 'Unauthorized' })
+
+    const access = await requirePageAccess(user.id, req.params.id)
+    if (!access.ok) return reply.status(access.status).send({ error: access.error })
 
     const page = await prisma.page.findUnique({ where: { id: req.params.id } })
     if (!page) return reply.status(404).send({ error: 'Not found' })
@@ -102,6 +124,9 @@ export async function v1Routes(app: FastifyInstance) {
   app.get<{ Params: { id: string } }>('/api/v1/databases/:id', async (req, reply) => {
     const user = await resolveUser(req)
     if (!user) return reply.status(401).send({ error: 'Unauthorized' })
+
+    const access = await requirePageAccess(user.id, req.params.id)
+    if (!access.ok) return reply.status(access.status).send({ error: access.error })
 
     const schema = await prisma.databaseSchema.findUnique({
       where: { pageId: req.params.id },

@@ -6,7 +6,7 @@ import Papa from 'papaparse'
 import * as XLSX from 'xlsx'
 import { prisma } from '../lib/prisma.js'
 import { auth } from '../lib/auth.js'
-import { isViewer } from '../lib/permissions.js'
+import { requirePageAccess, requireWorkspaceMember } from '../lib/workspace.js'
 
 interface SpreadsheetColumn {
   id: string
@@ -105,14 +105,22 @@ function parseSpreadsheet(buf: Buffer): { headers: string[]; rows: Record<string
 }
 
 export async function importRoutes(app: FastifyInstance) {
-  // POST /api/import/notion — accepts multipart zip upload
+  // POST /api/import/notion — accepts multipart zip upload.
+  // Fields (must be sent before the file part in the multipart stream):
+  //   workspaceId — required, the workspace to import pages into
   app.post('/api/import/notion', async (req, reply) => {
     const session = await getSession(req)
     if (!session) return reply.status(401).send({ error: 'Unauthorized' })
-    if (isViewer(session.user)) return reply.status(403).send({ error: 'Viewers cannot import content' })
 
     const data = await req.file()
     if (!data) return reply.status(400).send({ error: 'No file uploaded' })
+
+    const fields = data.fields as Record<string, { value?: unknown } | undefined>
+    const workspaceId = typeof fields.workspaceId?.value === 'string' ? fields.workspaceId.value : undefined
+    if (!workspaceId) return reply.status(400).send({ error: 'workspaceId is required' })
+
+    const access = await requireWorkspaceMember(session.user.id, workspaceId, 'EDITOR')
+    if (!access.ok) return reply.status(access.status).send({ error: access.error })
 
     const buf = await data.toBuffer()
     let zip: AdmZip
@@ -144,7 +152,7 @@ export async function importRoutes(app: FastifyInstance) {
 
     // Starting position for top-level pages, computed once rather than per file.
     const firstSibling = await prisma.page.findMany({
-      where: { parentPageId: null, isArchived: false },
+      where: { workspaceId, parentPageId: null, isArchived: false },
       select: { position: true },
       orderBy: { position: 'desc' },
       take: 1,
@@ -179,6 +187,7 @@ export async function importRoutes(app: FastifyInstance) {
 
         const page = await prisma.page.create({
           data: {
+            workspaceId,
             title,
             content: body ? (markdownToTiptap(body) as Prisma.InputJsonValue) : Prisma.JsonNull,
             isDatabase: hasMatchingCsv,
@@ -245,10 +254,10 @@ export async function importRoutes(app: FastifyInstance) {
   // Fields (must be sent before the file part in the multipart stream):
   //   pageId       — if set, append rows to this existing database instead of creating a new one
   //   parentPageId — if set (and pageId isn't), nest the newly created database page under it
+  //   workspaceId  — required unless pageId is set (workspace is then derived from the target page)
   app.post('/api/import/spreadsheet', async (req, reply) => {
     const session = await getSession(req)
     if (!session) return reply.status(401).send({ error: 'Unauthorized' })
-    if (isViewer(session.user)) return reply.status(403).send({ error: 'Viewers cannot import content' })
 
     const data = await req.file()
     if (!data) return reply.status(400).send({ error: 'No file uploaded' })
@@ -256,6 +265,27 @@ export async function importRoutes(app: FastifyInstance) {
     const fields = data.fields as Record<string, { value?: unknown } | undefined>
     const targetPageId = typeof fields.pageId?.value === 'string' && fields.pageId.value ? fields.pageId.value : undefined
     const parentPageId = typeof fields.parentPageId?.value === 'string' && fields.parentPageId.value ? fields.parentPageId.value : undefined
+    const requestedWorkspaceId = typeof fields.workspaceId?.value === 'string' ? fields.workspaceId.value : undefined
+
+    let workspaceId: string
+    if (targetPageId) {
+      const access = await requirePageAccess(session.user.id, targetPageId, 'EDITOR')
+      if (!access.ok) return reply.status(access.status).send({ error: access.error })
+      workspaceId = access.workspaceId
+    } else {
+      if (!requestedWorkspaceId) return reply.status(400).send({ error: 'workspaceId is required' })
+      const access = await requireWorkspaceMember(session.user.id, requestedWorkspaceId, 'EDITOR')
+      if (!access.ok) return reply.status(access.status).send({ error: access.error })
+      workspaceId = requestedWorkspaceId
+
+      if (parentPageId) {
+        const parent = await prisma.page.findUnique({ where: { id: parentPageId }, select: { workspaceId: true } })
+        if (!parent) return reply.status(404).send({ error: 'Parent page not found' })
+        if (parent.workspaceId !== workspaceId) {
+          return reply.status(400).send({ error: 'Parent page belongs to a different workspace' })
+        }
+      }
+    }
 
     const buf = await data.toBuffer()
     let headers: string[]
@@ -313,7 +343,7 @@ export async function importRoutes(app: FastifyInstance) {
     const title = (data.filename ?? 'Untitled').replace(/\.(xlsx|xls|csv)$/i, '')
 
     const siblings = await prisma.page.findMany({
-      where: { parentPageId: parentPageId ?? null, isArchived: false },
+      where: { workspaceId, parentPageId: parentPageId ?? null, isArchived: false },
       select: { position: true },
       orderBy: { position: 'desc' },
       take: 1,
@@ -322,6 +352,7 @@ export async function importRoutes(app: FastifyInstance) {
 
     const page = await prisma.page.create({
       data: {
+        workspaceId,
         title,
         isDatabase: true,
         parentPageId: parentPageId ?? null,

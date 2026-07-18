@@ -74,7 +74,7 @@ export function PagesPanel() {
                   )}
                 </div>
                 <div className="text-xs text-gray-400 dark:text-gray-500 mt-0.5">
-                  Owned by {page.createdBy.name} · Updated {new Date(page.updatedAt).toLocaleDateString()}
+                  {page.workspace.name} · Owned by {page.createdBy.name} · Updated {new Date(page.updatedAt).toLocaleDateString()}
                 </div>
               </div>
               {page.isArchived && (

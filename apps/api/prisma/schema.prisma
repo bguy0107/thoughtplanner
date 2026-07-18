@@ -25,14 +25,15 @@ model User {
   createdAt     DateTime  @default(now())
   updatedAt     DateTime  @updatedAt
 
-  sessions       Session[]
-  accounts       Account[]
-  pagesCreated   Page[]    @relation("PageCreatedBy")
-  pagesUpdated   Page[]    @relation("PageUpdatedBy")
-  files          File[]
-  apiKeys        ApiKey[]
-  invitesCreated Invite[]  @relation("InviteCreatedBy")
-  inviteRedeemed Invite[]  @relation("InviteRedeemedBy")
+  sessions            Session[]
+  accounts            Account[]
+  pagesCreated        Page[]            @relation("PageCreatedBy")
+  pagesUpdated        Page[]            @relation("PageUpdatedBy")
+  files               File[]
+  apiKeys             ApiKey[]
+  invitesCreated      Invite[]          @relation("InviteCreatedBy")
+  inviteRedeemed      Invite[]          @relation("InviteRedeemedBy")
+  workspaceMemberships WorkspaceMember[]
 }
 
 model Session {
@@ -83,10 +84,44 @@ enum Role {
   VIEWER
 }
 
+// ─── Workspaces ─────────────────────────────────────────────────────────────
+
+enum WorkspaceRole {
+  ADMIN
+  EDITOR
+  VIEWER
+}
+
+model Workspace {
+  id        String   @id @default(cuid())
+  name      String
+  icon      String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  members WorkspaceMember[]
+  pages   Page[]
+}
+
+model WorkspaceMember {
+  id          String        @id @default(cuid())
+  workspaceId String
+  userId      String
+  role        WorkspaceRole @default(EDITOR)
+  createdAt   DateTime      @default(now())
+
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([workspaceId, userId])
+  @@index([userId])
+}
+
 // ─── Core content ─────────────────────────────────────────────────────────────
 
 model Page {
   id           String   @id @default(cuid())
+  workspaceId  String
   parentPageId String?
   title        String   @default("Untitled")
   icon         String?
@@ -103,6 +138,7 @@ model Page {
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
 
+  workspace  Workspace @relation(fields: [workspaceId], references: [id], onDelete: Restrict)
   parent     Page?  @relation("PageChildren", fields: [parentPageId], references: [id])
   children   Page[] @relation("PageChildren")
   createdBy  User   @relation("PageCreatedBy", fields: [createdById], references: [id])
@@ -114,6 +150,7 @@ model Page {
 
   @@index([parentPageId])
   @@index([isArchived, position])
+  @@index([workspaceId, isArchived, position])
   @@index([title(ops: raw("gin_trgm_ops"))], type: Gin)
 }
 

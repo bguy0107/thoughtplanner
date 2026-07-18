@@ -3,7 +3,7 @@ import { randomUUID } from 'crypto'
 import { prisma } from '../lib/prisma.js'
 import { auth } from '../lib/auth.js'
 import { minio, BUCKET, fileUrl } from '../lib/minio.js'
-import { isViewer } from '../lib/permissions.js'
+import { requirePageAccess } from '../lib/workspace.js'
 
 type DbFile = NonNullable<Awaited<ReturnType<typeof prisma.file.findUnique>>>
 
@@ -52,7 +52,9 @@ export async function fileRoutes(app: FastifyInstance) {
     async (req, reply) => {
       const session = await getSession(req)
       if (!session) return reply.status(401).send({ error: 'Unauthorized' })
-      if (isViewer(session.user)) return reply.status(403).send({ error: 'Viewers cannot upload files' })
+
+      const access = await requirePageAccess(session.user.id, req.params.pageId, 'EDITOR')
+      if (!access.ok) return reply.status(access.status).send({ error: access.error })
 
       const data = await req.file()
       if (!data) return reply.status(400).send({ error: 'No file uploaded' })
@@ -95,6 +97,9 @@ export async function fileRoutes(app: FastifyInstance) {
       const session = await getSession(req)
       if (!session) return reply.status(401).send({ error: 'Unauthorized' })
 
+      const access = await requirePageAccess(session.user.id, req.params.pageId)
+      if (!access.ok) return reply.status(access.status).send({ error: access.error })
+
       const files = await prisma.file.findMany({
         where: { pageId: req.params.pageId },
         orderBy: { createdAt: 'desc' },
@@ -108,10 +113,12 @@ export async function fileRoutes(app: FastifyInstance) {
   app.delete<{ Params: { id: string } }>('/api/files/:id', async (req, reply) => {
     const session = await getSession(req)
     if (!session) return reply.status(401).send({ error: 'Unauthorized' })
-    if (isViewer(session.user)) return reply.status(403).send({ error: 'Viewers cannot delete files' })
 
     const file = await prisma.file.findUnique({ where: { id: req.params.id } })
     if (!file) return reply.status(404).send({ error: 'Not found' })
+
+    const access = await requirePageAccess(session.user.id, file.pageId, 'EDITOR')
+    if (!access.ok) return reply.status(access.status).send({ error: access.error })
 
     await minio.removeObject(BUCKET, file.storageKey)
     await prisma.file.delete({ where: { id: req.params.id } })

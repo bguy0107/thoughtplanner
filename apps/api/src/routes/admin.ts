@@ -17,6 +17,8 @@ export async function adminRoutes(app: FastifyInstance) {
     const pages = await prisma.page.findMany({
       select: {
         id: true,
+        workspaceId: true,
+        workspace: { select: { name: true } },
         parentPageId: true,
         title: true,
         icon: true,
@@ -90,6 +92,8 @@ export async function adminRoutes(app: FastifyInstance) {
       where: { isDatabase: true },
       select: {
         id: true,
+        workspaceId: true,
+        workspace: { select: { name: true } },
         title: true,
         icon: true,
         isArchived: true,
@@ -103,6 +107,8 @@ export async function adminRoutes(app: FastifyInstance) {
 
     return pages.map((p) => ({
       id: p.id,
+      workspaceId: p.workspaceId,
+      workspaceName: p.workspace.name,
       title: p.title,
       icon: p.icon,
       isArchived: p.isArchived,

@@ -142,6 +142,26 @@ export const Editor = forwardRef<EditorHandle, EditorProps>(function Editor(
       attributes: {
         class: 'tiptap prose prose-gray dark:prose-invert max-w-none focus:outline-none min-h-[60vh]',
       },
+      handlePaste: (view, event) => {
+        if (readOnly) return false
+        const files = Array.from(event.clipboardData?.items ?? [])
+          .filter((item) => item.kind === 'file' && item.type.startsWith('image/'))
+          .map((item) => item.getAsFile())
+          .filter((file): file is File => !!file)
+        if (files.length === 0) return false
+        event.preventDefault()
+        const { schema } = view.state
+        files.forEach((file) => {
+          const pos = view.state.selection.from
+          api.files.upload(pageId, file)
+            .then((uploaded) => {
+              const node = schema.nodes.image.create({ src: uploaded.url, alt: file.name })
+              view.dispatch(view.state.tr.insert(pos, node))
+            })
+            .catch((err) => console.error('Failed to upload pasted image', err))
+        })
+        return true
+      },
     },
   })
 

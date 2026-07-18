@@ -41,7 +41,7 @@ export function PageItem({ page, depth, tree, sortable = false }: PageItemProps)
 
   async function handleAddChild(e: React.MouseEvent) {
     e.stopPropagation()
-    const child = await addPage(page.id)
+    const child = await addPage(page.workspaceId, page.id)
     setExpanded(true)
     router.push(`/page/${child.id}`)
   }

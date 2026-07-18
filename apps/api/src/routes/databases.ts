@@ -3,7 +3,7 @@ import type { Prisma } from '@prisma/client'
 import { z } from 'zod'
 import { prisma } from '../lib/prisma.js'
 import { auth } from '../lib/auth.js'
-import { isViewer } from '../lib/permissions.js'
+import { requirePageAccess } from '../lib/workspace.js'
 
 async function getSession(req: FastifyRequest) {
   return auth.api.getSession({ headers: req.headers as unknown as Headers })
@@ -97,6 +97,9 @@ export async function databaseRoutes(app: FastifyInstance) {
     const session = await getSession(req)
     if (!session) return reply.status(401).send({ error: 'Unauthorized' })
 
+    const access = await requirePageAccess(session.user.id, req.params.pageId)
+    if (!access.ok) return reply.status(access.status).send({ error: access.error })
+
     const schema = await prisma.databaseSchema.findUnique({
       where: { pageId: req.params.pageId },
       include: { rows: { orderBy: { position: 'asc' } } },
@@ -116,6 +119,9 @@ export async function databaseRoutes(app: FastifyInstance) {
     async (req, reply) => {
       const session = await getSession(req)
       if (!session) return reply.status(401).send({ error: 'Unauthorized' })
+
+      const access = await requirePageAccess(session.user.id, req.params.pageId)
+      if (!access.ok) return reply.status(access.status).send({ error: access.error })
 
       const rawIds = (req.query as { ids?: string }).ids ?? ''
       const ids = rawIds.split(',').filter(Boolean)
@@ -143,7 +149,9 @@ export async function databaseRoutes(app: FastifyInstance) {
   app.patch<{ Params: { pageId: string } }>('/api/databases/:pageId/schema', async (req, reply) => {
     const session = await getSession(req)
     if (!session) return reply.status(401).send({ error: 'Unauthorized' })
-    if (isViewer(session.user)) return reply.status(403).send({ error: 'Viewers cannot edit the schema' })
+
+    const access = await requirePageAccess(session.user.id, req.params.pageId, 'EDITOR')
+    if (!access.ok) return reply.status(access.status).send({ error: access.error })
 
     const body = UpdateSchemaBodySchema.safeParse(req.body)
     if (!body.success) return reply.status(400).send({ error: body.error.flatten() })
@@ -160,7 +168,9 @@ export async function databaseRoutes(app: FastifyInstance) {
   app.post<{ Params: { pageId: string } }>('/api/databases/:pageId/rows', async (req, reply) => {
     const session = await getSession(req)
     if (!session) return reply.status(401).send({ error: 'Unauthorized' })
-    if (isViewer(session.user)) return reply.status(403).send({ error: 'Viewers cannot create rows' })
+
+    const access = await requirePageAccess(session.user.id, req.params.pageId, 'EDITOR')
+    if (!access.ok) return reply.status(access.status).send({ error: access.error })
 
     const body = CreateRowBodySchema.safeParse(req.body)
     if (!body.success) return reply.status(400).send({ error: body.error.flatten() })
@@ -191,7 +201,15 @@ export async function databaseRoutes(app: FastifyInstance) {
   app.patch<{ Params: { rowId: string } }>('/api/databases/rows/:rowId', async (req, reply) => {
     const session = await getSession(req)
     if (!session) return reply.status(401).send({ error: 'Unauthorized' })
-    if (isViewer(session.user)) return reply.status(403).send({ error: 'Viewers cannot edit rows' })
+
+    const existing = await prisma.databaseRow.findUnique({
+      where: { id: req.params.rowId },
+      select: { pageId: true },
+    })
+    if (!existing) return reply.status(404).send({ error: 'Not found' })
+
+    const access = await requirePageAccess(session.user.id, existing.pageId, 'EDITOR')
+    if (!access.ok) return reply.status(access.status).send({ error: access.error })
 
     const body = UpdateRowBodySchema.safeParse(req.body)
     if (!body.success) return reply.status(400).send({ error: body.error.flatten() })
@@ -213,7 +231,15 @@ export async function databaseRoutes(app: FastifyInstance) {
   app.delete<{ Params: { rowId: string } }>('/api/databases/rows/:rowId', async (req, reply) => {
     const session = await getSession(req)
     if (!session) return reply.status(401).send({ error: 'Unauthorized' })
-    if (isViewer(session.user)) return reply.status(403).send({ error: 'Viewers cannot delete rows' })
+
+    const existing = await prisma.databaseRow.findUnique({
+      where: { id: req.params.rowId },
+      select: { pageId: true },
+    })
+    if (!existing) return reply.status(404).send({ error: 'Not found' })
+
+    const access = await requirePageAccess(session.user.id, existing.pageId, 'EDITOR')
+    if (!access.ok) return reply.status(access.status).send({ error: access.error })
 
     await prisma.databaseRow.delete({ where: { id: req.params.rowId } })
     return reply.status(204).send()

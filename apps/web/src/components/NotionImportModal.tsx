@@ -12,11 +12,12 @@ interface ImportResult {
 }
 
 interface Props {
+  workspaceId: string
   onClose: () => void
   onImported: () => void
 }
 
-export function NotionImportModal({ onClose, onImported }: Props) {
+export function NotionImportModal({ workspaceId, onClose, onImported }: Props) {
   const [dragging, setDragging] = useState(false)
   const [uploading, setUploading] = useState(false)
   const [result, setResult] = useState<ImportResult | null>(null)
@@ -35,6 +36,8 @@ export function NotionImportModal({ onClose, onImported }: Props) {
 
     try {
       const form = new FormData()
+      // Fields must precede the file part so the server can read them before streaming the file.
+      form.append('workspaceId', workspaceId)
       form.append('file', file)
       const res = await fetch(`${API}/api/import/notion`, {
         method: 'POST',

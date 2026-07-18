@@ -49,7 +49,7 @@ export function DatabasesPanel() {
                   )}
                 </div>
                 <div className="text-xs text-gray-400 dark:text-gray-500 mt-0.5">
-                  Owned by {db.createdBy.name} · {db.columnCount} columns · {db.rowCount} rows · Updated{' '}
+                  {db.workspaceName} · Owned by {db.createdBy.name} · {db.columnCount} columns · {db.rowCount} rows · Updated{' '}
                   {new Date(db.updatedAt).toLocaleDateString()}
                 </div>
               </div>

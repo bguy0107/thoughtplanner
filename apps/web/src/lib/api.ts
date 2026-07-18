@@ -19,12 +19,32 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
 
 export type PageSummary = {
   id: string
+  workspaceId: string
   parentPageId: string | null
   title: string
   icon: string | null
   isDatabase: boolean
   position: number
   updatedAt: string
+}
+
+export type WorkspaceRole = 'ADMIN' | 'EDITOR' | 'VIEWER'
+
+export type Workspace = {
+  id: string
+  name: string
+  icon: string | null
+  createdAt: string
+}
+
+export type WorkspaceMembership = Workspace & { role: WorkspaceRole }
+
+export type WorkspaceMember = {
+  id: string
+  userId: string
+  role: WorkspaceRole
+  createdAt: string
+  user: { id: string; name: string; email: string; image: string | null }
 }
 
 export type Page = PageSummary & {
@@ -121,6 +141,8 @@ export type InviteCreated = {
 
 export type AdminPage = {
   id: string
+  workspaceId: string
+  workspace: { name: string }
   parentPageId: string | null
   title: string
   icon: string | null
@@ -134,6 +156,8 @@ export type AdminPage = {
 
 export type AdminDatabase = {
   id: string
+  workspaceId: string
+  workspaceName: string
   title: string
   icon: string | null
   isArchived: boolean
@@ -145,10 +169,11 @@ export type AdminDatabase = {
 
 export const api = {
   pages: {
-    list: () => request<PageSummary[]>('/api/pages'),
+    list: (workspaceId?: string) =>
+      request<PageSummary[]>(`/api/pages${workspaceId ? `?workspaceId=${workspaceId}` : ''}`),
     get: (id: string) => request<Page>(`/api/pages/${id}`),
     getPublic: (id: string) => request<Pick<Page, 'id' | 'title' | 'icon' | 'coverImage' | 'content' | 'isPublic' | 'isDatabase'>>(`/api/public/${id}`),
-    create: (data: { parentPageId?: string; title?: string; icon?: string; isDatabase?: boolean }) =>
+    create: (data: { workspaceId: string; parentPageId?: string; title?: string; icon?: string; isDatabase?: boolean }) =>
       request<Page>('/api/pages', { method: 'POST', body: JSON.stringify(data) }),
     update: (id: string, data: Partial<Pick<Page, 'title' | 'icon' | 'coverImage' | 'content' | 'isArchived' | 'isPublic' | 'position' | 'parentPageId'>>) =>
       request<Page>(`/api/pages/${id}`, { method: 'PATCH', body: JSON.stringify(data) }),
@@ -196,7 +221,8 @@ export const api = {
     },
     delete: (id: string) => request<void>(`/api/files/${id}`, { method: 'DELETE' }),
   },
-  search: (q: string) => request<SearchResult[]>(`/api/search?q=${encodeURIComponent(q)}`),
+  search: (q: string, workspaceId: string) =>
+    request<SearchResult[]>(`/api/search?q=${encodeURIComponent(q)}&workspaceId=${workspaceId}`),
   apiKeys: {
     list: () => request<ApiKey[]>('/api/api-keys'),
     create: (name: string) => request<ApiKeyCreated>('/api/api-keys', { method: 'POST', body: JSON.stringify({ name }) }),
@@ -217,6 +243,30 @@ export const api = {
     },
     databases: {
       list: () => request<AdminDatabase[]>('/api/admin/databases'),
+    },
+  },
+  workspaces: {
+    list: () => request<WorkspaceMembership[]>('/api/workspaces'),
+    create: (data: { name: string; icon?: string }) =>
+      request<WorkspaceMembership>('/api/workspaces', { method: 'POST', body: JSON.stringify(data) }),
+    get: (id: string) => request<WorkspaceMembership>(`/api/workspaces/${id}`),
+    update: (id: string, data: { name?: string; icon?: string | null }) =>
+      request<Workspace>(`/api/workspaces/${id}`, { method: 'PATCH', body: JSON.stringify(data) }),
+    delete: (id: string) => request<void>(`/api/workspaces/${id}`, { method: 'DELETE' }),
+    members: {
+      list: (workspaceId: string) => request<WorkspaceMember[]>(`/api/workspaces/${workspaceId}/members`),
+      add: (workspaceId: string, data: { email: string; role: WorkspaceRole }) =>
+        request<WorkspaceMember>(`/api/workspaces/${workspaceId}/members`, {
+          method: 'POST',
+          body: JSON.stringify(data),
+        }),
+      setRole: (workspaceId: string, memberId: string, role: WorkspaceRole) =>
+        request<WorkspaceMember>(`/api/workspaces/${workspaceId}/members/${memberId}`, {
+          method: 'PATCH',
+          body: JSON.stringify({ role }),
+        }),
+      remove: (workspaceId: string, memberId: string) =>
+        request<void>(`/api/workspaces/${workspaceId}/members/${memberId}`, { method: 'DELETE' }),
     },
   },
 }

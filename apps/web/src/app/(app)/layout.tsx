@@ -7,21 +7,29 @@ import { useSession } from '@/lib/auth-client'
 import { Sidebar } from '@/components/sidebar/Sidebar'
 import { SearchModal } from '@/components/SearchModal'
 import { useSidebarStore } from '@/store/sidebar'
+import { useWorkspaceStore } from '@/store/workspace'
+import { CreateWorkspaceModal } from '@/components/sidebar/CreateWorkspaceModal'
 
 export default function AppLayout({ children }: { children: React.ReactNode }) {
   const { data: session, isPending } = useSession()
   const router = useRouter()
   const { collapsed, fetchPages } = useSidebarStore()
+  const { workspaces, currentWorkspaceId, loading: workspacesLoading, fetchWorkspaces } = useWorkspaceStore()
   const [mobileOpen, setMobileOpen] = useState(false)
   const [searchOpen, setSearchOpen] = useState(false)
+  const [createWorkspaceOpen, setCreateWorkspaceOpen] = useState(false)
 
   useEffect(() => {
     if (!isPending && !session) router.push('/login')
   }, [session, isPending, router])
 
   useEffect(() => {
-    if (session) fetchPages()
-  }, [session, fetchPages])
+    if (session) fetchWorkspaces()
+  }, [session, fetchWorkspaces])
+
+  useEffect(() => {
+    if (currentWorkspaceId) fetchPages(currentWorkspaceId)
+  }, [currentWorkspaceId, fetchPages])
 
   // Ctrl+K / Cmd+K global shortcut
   useEffect(() => {
@@ -41,6 +49,31 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-[#f7f7f5] dark:bg-sidebar-dark-bg">
         <div className="w-6 h-6 border-2 border-gray-300 dark:border-gray-600 border-t-gray-700 dark:border-t-gray-300 rounded-full animate-spin" />
+      </div>
+    )
+  }
+
+  if (!workspacesLoading && workspaces.length === 0) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-[#f7f7f5] dark:bg-sidebar-dark-bg px-4">
+        <div className="text-center max-w-sm">
+          <h1 className="text-lg font-semibold text-gray-800 dark:text-gray-200 mb-2">No workspaces yet</h1>
+          <p className="text-sm text-gray-500 dark:text-gray-400 mb-5">
+            You aren&apos;t a member of any workspace. Create one to get started, or ask an admin to add you to theirs.
+          </p>
+          <button
+            onClick={() => setCreateWorkspaceOpen(true)}
+            className="px-4 py-2 text-sm bg-gray-900 text-white rounded-lg hover:bg-gray-700 dark:bg-gray-100 dark:text-gray-900 dark:hover:bg-gray-300 transition-colors"
+          >
+            Create a workspace
+          </button>
+        </div>
+        {createWorkspaceOpen && (
+          <CreateWorkspaceModal
+            onClose={() => setCreateWorkspaceOpen(false)}
+            onCreated={() => fetchWorkspaces()}
+          />
+        )}
       </div>
     )
   }

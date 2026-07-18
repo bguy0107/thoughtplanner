@@ -2,16 +2,19 @@
 
 import { useSession } from '@/lib/auth-client'
 import { useSidebarStore } from '@/store/sidebar'
+import { useWorkspaceStore } from '@/store/workspace'
 import { useRouter } from 'next/navigation'
 import { FileText } from 'lucide-react'
 
 export default function HomePage() {
   const { data: session } = useSession()
   const { addPage } = useSidebarStore()
+  const currentWorkspaceId = useWorkspaceStore((s) => s.currentWorkspaceId)
   const router = useRouter()
 
   async function handleNewPage() {
-    const page = await addPage()
+    if (!currentWorkspaceId) return
+    const page = await addPage(currentWorkspaceId)
     router.push(`/page/${page.id}`)
   }
 
