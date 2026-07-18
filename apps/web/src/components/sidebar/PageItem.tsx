@@ -13,10 +13,11 @@ import { PageTree } from './PageTree'
 interface PageItemProps {
   page: PageSummary
   depth: number
+  tree: Map<string | null, PageSummary[]>
   sortable?: boolean
 }
 
-export function PageItem({ page, depth, sortable = false }: PageItemProps) {
+export function PageItem({ page, depth, tree, sortable = false }: PageItemProps) {
   const router = useRouter()
   const pathname = usePathname()
   const [expanded, setExpanded] = useState(false)
@@ -120,7 +121,7 @@ export function PageItem({ page, depth, sortable = false }: PageItemProps) {
         )}
       </div>
 
-      {expanded && <PageTree parentId={page.id} depth={depth + 1} />}
+      {expanded && <PageTree parentId={page.id} depth={depth + 1} tree={tree} />}
     </li>
   )
 }

@@ -1,10 +1,10 @@
 'use client'
 
-import { useState } from 'react'
+import { useMemo, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { Plus, PanelLeftClose, Table2, Search, Settings, FileDown, FileSpreadsheet } from 'lucide-react'
 import { signOut, useSession } from '@/lib/auth-client'
-import { useSidebarStore } from '@/store/sidebar'
+import { useSidebarStore, buildPageTree } from '@/store/sidebar'
 import { PageTree } from './PageTree'
 import { SearchModal } from '@/components/SearchModal'
 import { NotionImportModal } from '@/components/NotionImportModal'
@@ -15,6 +15,8 @@ export function Sidebar({ onClose }: { onClose?: () => void }) {
   const router = useRouter()
   const { data: session } = useSession()
   const { addPage, addDatabase, toggleCollapsed, fetchPages } = useSidebarStore()
+  const pages = useSidebarStore((s) => s.pages)
+  const tree = useMemo(() => buildPageTree(pages), [pages])
   const [searchOpen, setSearchOpen] = useState(false)
   const [importOpen, setImportOpen] = useState(false)
   const [spreadsheetImportOpen, setSpreadsheetImportOpen] = useState(false)
@@ -70,7 +72,7 @@ export function Sidebar({ onClose }: { onClose?: () => void }) {
 
         {/* Page tree */}
         <div className="flex-1 overflow-y-auto py-2">
-          <PageTree parentId={null} depth={0} />
+          <PageTree parentId={null} depth={0} tree={tree} />
         </div>
 
         {/* Footer */}

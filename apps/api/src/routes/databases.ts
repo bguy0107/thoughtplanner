@@ -33,44 +33,59 @@ async function computeRollups(
   const rollupCols = columns.filter((c) => c.type === 'rollup' && c.relationColId && c.targetColId && c.operation)
   if (rollupCols.length === 0) return rows
 
-  return Promise.all(
-    rows.map(async (row) => {
-      const props = { ...(row.properties as Record<string, unknown>) }
+  // Gather every related row id referenced by any rollup column across all rows,
+  // and resolve them in a single query instead of one per (row, column) pair.
+  const allRelatedIds = new Set<string>()
+  for (const row of rows) {
+    const props = row.properties as Record<string, unknown>
+    for (const col of rollupCols) {
+      const relCol = columns.find((c) => c.id === col.relationColId && c.type === 'relation')
+      if (!relCol) continue
+      const relatedIds = props[relCol.id]
+      if (Array.isArray(relatedIds)) {
+        for (const id of relatedIds as string[]) allRelatedIds.add(id)
+      }
+    }
+  }
 
-      for (const col of rollupCols) {
-        const relCol = columns.find((c) => c.id === col.relationColId && c.type === 'relation')
-        if (!relCol || !col.targetColId || !col.operation) continue
+  const relatedRows = allRelatedIds.size
+    ? await prisma.databaseRow.findMany({
+        where: { id: { in: [...allRelatedIds] } },
+        select: { id: true, properties: true },
+      })
+    : []
+  const relatedById = new Map(relatedRows.map((r) => [r.id, r.properties as Record<string, unknown>]))
 
-        const relatedIds = props[relCol.id]
-        if (!Array.isArray(relatedIds) || relatedIds.length === 0) {
-          props[col.id] = col.operation === 'count' ? 0 : null
-          continue
-        }
+  return rows.map((row) => {
+    const props = { ...(row.properties as Record<string, unknown>) }
 
-        const relatedRows = await prisma.databaseRow.findMany({
-          where: { id: { in: relatedIds as string[] } },
-          select: { properties: true },
-        })
+    for (const col of rollupCols) {
+      const relCol = columns.find((c) => c.id === col.relationColId && c.type === 'relation')
+      if (!relCol || !col.targetColId || !col.operation) continue
 
-        const vals = relatedRows
-          .map((r) => ((r.properties as Record<string, unknown>)[col.targetColId!]))
-          .filter((v) => v != null)
-
-        if (col.operation === 'count') {
-          props[col.id] = relatedRows.length
-        } else {
-          const nums = vals.map(Number).filter((n) => !isNaN(n))
-          if (nums.length === 0) { props[col.id] = null; continue }
-          if (col.operation === 'sum') props[col.id] = nums.reduce((a, b) => a + b, 0)
-          else if (col.operation === 'avg') props[col.id] = nums.reduce((a, b) => a + b, 0) / nums.length
-          else if (col.operation === 'min') props[col.id] = Math.min(...nums)
-          else if (col.operation === 'max') props[col.id] = Math.max(...nums)
-        }
+      const relatedIds = props[relCol.id]
+      if (!Array.isArray(relatedIds) || relatedIds.length === 0) {
+        props[col.id] = col.operation === 'count' ? 0 : null
+        continue
       }
 
-      return { ...row, properties: props }
-    }),
-  )
+      const matched = (relatedIds as string[]).map((id) => relatedById.get(id)).filter((p): p is Record<string, unknown> => p != null)
+      const vals = matched.map((p) => p[col.targetColId!]).filter((v) => v != null)
+
+      if (col.operation === 'count') {
+        props[col.id] = matched.length
+      } else {
+        const nums = vals.map(Number).filter((n) => !isNaN(n))
+        if (nums.length === 0) { props[col.id] = null; continue }
+        if (col.operation === 'sum') props[col.id] = nums.reduce((a, b) => a + b, 0)
+        else if (col.operation === 'avg') props[col.id] = nums.reduce((a, b) => a + b, 0) / nums.length
+        else if (col.operation === 'min') props[col.id] = Math.min(...nums)
+        else if (col.operation === 'max') props[col.id] = Math.max(...nums)
+      }
+    }
+
+    return { ...row, properties: props }
+  })
 }
 
 export async function databaseRoutes(app: FastifyInstance) {

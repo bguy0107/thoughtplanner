@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { AlignLeft, ArrowDown, ArrowUp, Calendar, CheckSquare, ChevronDown, Hash, Link, Plus, RefreshCw, Tags, Trash2 } from 'lucide-react'
 import { api, type Column, type ColumnType, type DbRow, type DbSchema, type RelatedRow } from '@/lib/api'
 
@@ -78,27 +78,36 @@ export function TableView({ schema, onUpdateRow, onDeleteRow, onAddRow, onUpdate
     if (editing) inputRef.current?.focus()
   }, [editing])
 
-  const colMap = new Map(schema.columns.map((c) => [c.id, c]))
+  const colMap = useMemo(() => new Map(schema.columns.map((c) => [c.id, c])), [schema.columns])
 
-  const visibleColumns = schema.columns.filter((col) =>
-    col.name.toLowerCase().includes(columnFilter.toLowerCase())
+  const visibleColumns = useMemo(
+    () => schema.columns.filter((col) => col.name.toLowerCase().includes(columnFilter.toLowerCase())),
+    [schema.columns, columnFilter],
   )
 
-  const filtered = schema.rows.filter((row) => {
-    if (!filter) return true
-    return schema.columns.some((col) => {
-      const v = getProp(row, col.id)
-      return v != null && String(v).toLowerCase().includes(filter.toLowerCase())
-    })
-  })
+  const filtered = useMemo(
+    () =>
+      schema.rows.filter((row) => {
+        if (!filter) return true
+        return schema.columns.some((col) => {
+          const v = getProp(row, col.id)
+          return v != null && String(v).toLowerCase().includes(filter.toLowerCase())
+        })
+      }),
+    [schema.rows, schema.columns, filter],
+  )
 
-  const sorted = sort
-    ? [...filtered].sort((a, b) => {
-        const col = colMap.get(sort.colId)
-        if (!col) return 0
-        return compareVals(getProp(a, col.id), getProp(b, col.id), col.type, sort.dir)
-      })
-    : filtered
+  const sorted = useMemo(
+    () =>
+      sort
+        ? [...filtered].sort((a, b) => {
+            const col = colMap.get(sort.colId)
+            if (!col) return 0
+            return compareVals(getProp(a, col.id), getProp(b, col.id), col.type, sort.dir)
+          })
+        : filtered,
+    [filtered, sort, colMap],
+  )
 
   function cycleSort(colId: string) {
     setSort((s) => {

@@ -142,6 +142,15 @@ export async function importRoutes(app: FastifyInstance) {
     // Map from base name (without extension) to created page ID
     const pageIdByName = new Map<string, string>()
 
+    // Starting position for top-level pages, computed once rather than per file.
+    const firstSibling = await prisma.page.findMany({
+      where: { parentPageId: null, isArchived: false },
+      select: { position: true },
+      orderBy: { position: 'desc' },
+      take: 1,
+    })
+    let nextPosition = firstSibling[0] ? firstSibling[0].position + 1 : 0
+
     // Process markdown pages first
     for (const entry of mdFiles) {
       try {
@@ -166,14 +175,7 @@ export async function importRoutes(app: FastifyInstance) {
           return csvBase === baseName
         })
 
-        // Position at end of existing pages
-        const siblings = await prisma.page.findMany({
-          where: { parentPageId: null, isArchived: false },
-          select: { position: true },
-          orderBy: { position: 'desc' },
-          take: 1,
-        })
-        const position = siblings[0] ? siblings[0].position + 1 : 0
+        const position = nextPosition++
 
         const page = await prisma.page.create({
           data: {
@@ -221,15 +223,14 @@ export async function importRoutes(app: FastifyInstance) {
           data: { pageId, columns },
         })
 
-        for (const rowData of parsed.data) {
+        const rowsToInsert = parsed.data.map((rowData) => {
           const properties: Record<string, unknown> = {}
           for (const col of columns) {
             properties[col.id] = castValue(rowData[col.name] ?? '', col.type)
           }
-          await prisma.databaseRow.create({
-            data: { pageId, schemaId: schema.id, properties: properties as Prisma.InputJsonValue },
-          })
-        }
+          return { pageId, schemaId: schema.id, properties: properties as Prisma.InputJsonValue }
+        })
+        await prisma.databaseRow.createMany({ data: rowsToInsert })
 
         databasesCreated++
       } catch (e) {
@@ -296,15 +297,14 @@ export async function importRoutes(app: FastifyInstance) {
         })
       }
 
-      for (const rowData of rows) {
+      const rowsToInsert = rows.map((rowData) => {
         const properties: Record<string, unknown> = {}
         headers.forEach((h, i) => {
           properties[headerColumns[i].id] = castForColumn(rowData[h] ?? '', headerColumns[i])
         })
-        await prisma.databaseRow.create({
-          data: { pageId: targetPageId, schemaId: schema.id, properties: properties as Prisma.InputJsonValue },
-        })
-      }
+        return { pageId: targetPageId, schemaId: schema.id, properties: properties as Prisma.InputJsonValue }
+      })
+      await prisma.databaseRow.createMany({ data: rowsToInsert })
 
       return { pageId: targetPageId, rowsCreated: rows.length, columnsAdded }
     }
@@ -341,15 +341,14 @@ export async function importRoutes(app: FastifyInstance) {
       data: { pageId: page.id, columns: columns as unknown as Prisma.InputJsonValue },
     })
 
-    for (const rowData of rows) {
+    const rowsToInsert = rows.map((rowData) => {
       const properties: Record<string, unknown> = {}
       for (const col of columns) {
         properties[col.id] = castValue(rowData[col.name] ?? '', col.type as 'text' | 'number' | 'checkbox' | 'date')
       }
-      await prisma.databaseRow.create({
-        data: { pageId: page.id, schemaId: schema.id, properties: properties as Prisma.InputJsonValue },
-      })
-    }
+      return { pageId: page.id, schemaId: schema.id, properties: properties as Prisma.InputJsonValue }
+    })
+    await prisma.databaseRow.createMany({ data: rowsToInsert })
 
     return reply.status(201).send({ page, rowsCreated: rows.length })
   })

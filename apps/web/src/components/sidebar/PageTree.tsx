@@ -13,7 +13,7 @@ import {
   verticalListSortingStrategy,
   arrayMove,
 } from '@dnd-kit/sortable'
-import { useSidebarStore, buildPageTree } from '@/store/sidebar'
+import { useSidebarStore } from '@/store/sidebar'
 import { api } from '@/lib/api'
 import { PageItem } from './PageItem'
 import type { PageSummary } from '@/lib/api'
@@ -21,12 +21,12 @@ import type { PageSummary } from '@/lib/api'
 interface PageTreeProps {
   parentId: string | null
   depth: number
+  tree: Map<string | null, PageSummary[]>
 }
 
-export function PageTree({ parentId, depth }: PageTreeProps) {
+export function PageTree({ parentId, depth, tree }: PageTreeProps) {
   const pages = useSidebarStore((s) => s.pages)
   const setPages = useSidebarStore((s) => s.setPages)
-  const tree = buildPageTree(pages)
   const children = tree.get(parentId) ?? []
 
   const sensors = useSensors(
@@ -74,7 +74,7 @@ export function PageTree({ parentId, depth }: PageTreeProps) {
     return (
       <ul>
         {children.map((page) => (
-          <PageItem key={page.id} page={page} depth={depth} />
+          <PageItem key={page.id} page={page} depth={depth} tree={tree} />
         ))}
       </ul>
     )
@@ -85,7 +85,7 @@ export function PageTree({ parentId, depth }: PageTreeProps) {
       <SortableContext items={children.map((p) => p.id)} strategy={verticalListSortingStrategy}>
         <ul>
           {children.map((page) => (
-            <PageItem key={page.id} page={page} depth={depth} sortable />
+            <PageItem key={page.id} page={page} depth={depth} tree={tree} sortable />
           ))}
         </ul>
       </SortableContext>
