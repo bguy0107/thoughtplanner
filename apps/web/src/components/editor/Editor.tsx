@@ -15,6 +15,8 @@ import CodeBlockLowlight from '@tiptap/extension-code-block-lowlight'
 import { common, createLowlight } from 'lowlight'
 import tippy, { type Instance as TippyInstance } from 'tippy.js'
 import { Markdown } from 'tiptap-markdown'
+import GlobalDragHandle from 'tiptap-extension-global-drag-handle'
+import { BlockClickSelect } from './extensions/BlockClickSelect'
 import { SlashCommand } from './extensions/SlashCommand'
 import { SlashCommandMenu, type SlashCommandMenuHandle } from './SlashCommandMenu'
 import { BubbleMenuBar } from './BubbleMenuBar'
@@ -72,6 +74,7 @@ export const Editor = forwardRef<EditorHandle, EditorProps>(function Editor(
       Highlight,
       CodeBlockLowlight.configure({ lowlight }),
       Markdown.configure({ html: false, transformPastedText: true }),
+      ...(!readOnly ? [GlobalDragHandle.configure({ dragHandleWidth: 20, scrollTreshold: 100 }), BlockClickSelect] as AnyExtension[] : []),
       ...(!readOnly ? [SlashCommand.configure({
         suggestion: {
           char: '/',

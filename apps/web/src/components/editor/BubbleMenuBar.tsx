@@ -2,6 +2,7 @@
 
 import { useState } from 'react'
 import { BubbleMenu, type Editor } from '@tiptap/react'
+import { NodeSelection } from '@tiptap/pm/state'
 import { Bold, Italic, Underline, Strikethrough, Link, Highlighter, Code } from 'lucide-react'
 import { cn } from '@/lib/utils'
 
@@ -27,6 +28,7 @@ export function BubbleMenuBar({ editor }: BubbleMenuBarProps) {
     <BubbleMenu
       editor={editor}
       tippyOptions={{ duration: 100 }}
+      shouldShow={({ state }) => !state.selection.empty && !(state.selection instanceof NodeSelection)}
       className="flex items-center bg-gray-900 text-white rounded-lg shadow-xl overflow-hidden divide-x divide-gray-700"
     >
       {showLinkInput ? (
