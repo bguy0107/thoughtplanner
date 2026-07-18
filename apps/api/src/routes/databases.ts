@@ -24,7 +24,10 @@ type Col = z.infer<typeof ColumnSchema>
 
 const UpdateSchemaBodySchema = z.object({ columns: z.array(ColumnSchema) })
 const CreateRowBodySchema = z.object({ properties: z.record(z.unknown()).default({}) })
-const UpdateRowBodySchema = z.object({ properties: z.record(z.unknown()) })
+const UpdateRowBodySchema = z.object({
+  properties: z.record(z.unknown()).optional(),
+  position: z.number().optional(),
+})
 
 async function computeRollups(
   columns: Col[],
@@ -96,7 +99,7 @@ export async function databaseRoutes(app: FastifyInstance) {
 
     const schema = await prisma.databaseSchema.findUnique({
       where: { pageId: req.params.pageId },
-      include: { rows: { orderBy: { id: 'asc' } } },
+      include: { rows: { orderBy: { position: 'asc' } } },
     })
 
     if (!schema) return reply.status(404).send({ error: 'Not found' })
@@ -165,11 +168,19 @@ export async function databaseRoutes(app: FastifyInstance) {
     const schema = await prisma.databaseSchema.findUnique({ where: { pageId: req.params.pageId } })
     if (!schema) return reply.status(404).send({ error: 'No schema' })
 
+    // Place new row at end of the existing ones.
+    const last = await prisma.databaseRow.findFirst({
+      where: { pageId: req.params.pageId },
+      select: { position: true },
+      orderBy: { position: 'desc' },
+    })
+
     const row = await prisma.databaseRow.create({
       data: {
         pageId: req.params.pageId,
         schemaId: schema.id,
         properties: body.data.properties as Prisma.InputJsonValue,
+        position: last ? last.position + 1 : 0,
       },
     })
 
@@ -185,9 +196,14 @@ export async function databaseRoutes(app: FastifyInstance) {
     const body = UpdateRowBodySchema.safeParse(req.body)
     if (!body.success) return reply.status(400).send({ error: body.error.flatten() })
 
+    const { properties, position } = body.data
+
     const row = await prisma.databaseRow.update({
       where: { id: req.params.rowId },
-      data: { properties: body.data.properties as Prisma.InputJsonValue },
+      data: {
+        ...(properties !== undefined ? { properties: properties as Prisma.InputJsonValue } : {}),
+        ...(position !== undefined ? { position } : {}),
+      },
     })
 
     return row

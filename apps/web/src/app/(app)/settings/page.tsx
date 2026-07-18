@@ -4,8 +4,58 @@ import { useEffect, useState } from 'react'
 import { Copy, Trash2, Plus, Check, Eye, EyeOff } from 'lucide-react'
 import { api, type ApiKey, type ApiKeyCreated } from '@/lib/api'
 import { ThemeToggle } from '@/components/ThemeToggle'
+import { useSession } from '@/lib/auth-client'
+import { UsersPanel } from '@/components/settings/UsersPanel'
+import { PagesPanel } from '@/components/settings/PagesPanel'
+import { DatabasesPanel } from '@/components/settings/DatabasesPanel'
+
+type Tab = 'general' | 'users' | 'pages' | 'databases'
 
 export default function SettingsPage() {
+  const { data: session } = useSession()
+  const isAdmin = session?.user.role === 'ADMIN'
+  const [tab, setTab] = useState<Tab>('general')
+
+  const tabs: { id: Tab; label: string }[] = [
+    { id: 'general', label: 'General' },
+    ...(isAdmin
+      ? ([
+          { id: 'users', label: 'Users' },
+          { id: 'pages', label: 'Pages' },
+          { id: 'databases', label: 'Databases' },
+        ] as const)
+      : []),
+  ]
+
+  return (
+    <div className="max-w-2xl mx-auto px-8 py-12">
+      <h1 className="text-2xl font-bold text-gray-900 dark:text-gray-100 mb-6">Settings</h1>
+
+      <div className="flex gap-1 border-b border-gray-200 dark:border-gray-800 mb-8">
+        {tabs.map((t) => (
+          <button
+            key={t.id}
+            onClick={() => setTab(t.id)}
+            className={`px-3 py-2 text-sm font-medium border-b-2 -mb-px transition-colors ${
+              tab === t.id
+                ? 'border-gray-900 dark:border-gray-100 text-gray-900 dark:text-gray-100'
+                : 'border-transparent text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200'
+            }`}
+          >
+            {t.label}
+          </button>
+        ))}
+      </div>
+
+      {tab === 'general' && <GeneralSettings />}
+      {tab === 'users' && isAdmin && <UsersPanel />}
+      {tab === 'pages' && isAdmin && <PagesPanel />}
+      {tab === 'databases' && isAdmin && <DatabasesPanel />}
+    </div>
+  )
+}
+
+function GeneralSettings() {
   const [keys, setKeys] = useState<ApiKey[]>([])
   const [creating, setCreating] = useState(false)
   const [newName, setNewName] = useState('')
@@ -47,9 +97,7 @@ export default function SettingsPage() {
   }
 
   return (
-    <div className="max-w-2xl mx-auto px-8 py-12">
-      <h1 className="text-2xl font-bold text-gray-900 dark:text-gray-100 mb-8">Settings</h1>
-
+    <div>
       {/* Appearance section */}
       <section className="mb-10">
         <div className="flex items-center justify-between">

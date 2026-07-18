@@ -18,26 +18,34 @@ model User {
   emailVerified Boolean   @default(false)
   image         String?
   role          Role      @default(EDITOR)
+  // Better Auth `admin` plugin fields — banned = deactivated (blocks login, revokes sessions).
+  banned        Boolean   @default(false)
+  banReason     String?
+  banExpires    DateTime?
   createdAt     DateTime  @default(now())
   updatedAt     DateTime  @updatedAt
 
-  sessions     Session[]
-  accounts     Account[]
-  pagesCreated Page[]    @relation("PageCreatedBy")
-  pagesUpdated Page[]    @relation("PageUpdatedBy")
-  files        File[]
-  apiKeys      ApiKey[]
+  sessions       Session[]
+  accounts       Account[]
+  pagesCreated   Page[]    @relation("PageCreatedBy")
+  pagesUpdated   Page[]    @relation("PageUpdatedBy")
+  files          File[]
+  apiKeys        ApiKey[]
+  invitesCreated Invite[]  @relation("InviteCreatedBy")
+  inviteRedeemed Invite[]  @relation("InviteRedeemedBy")
 }
 
 model Session {
-  id        String   @id @default(cuid())
-  userId    String
-  token     String   @unique
-  expiresAt DateTime
-  ipAddress String?
-  userAgent String?
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  id             String   @id @default(cuid())
+  userId         String
+  token          String   @unique
+  expiresAt      DateTime
+  ipAddress      String?
+  userAgent      String?
+  // Better Auth `admin` plugin field (impersonation) — unused, kept for schema compatibility.
+  impersonatedBy String?
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
 
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 }
@@ -125,11 +133,13 @@ model DatabaseRow {
   schemaId   String
   // {columnId: value}
   properties Json   @default("{}")
+  // Fractional-index-style ordering for drag-to-reorder, same convention as Page.position
+  position   Float  @default(0)
 
   page   Page           @relation(fields: [pageId], references: [id], onDelete: Cascade)
   schema DatabaseSchema @relation(fields: [schemaId], references: [id], onDelete: Cascade)
 
-  @@index([pageId])
+  @@index([pageId, position])
 }
 
 model ApiKey {
@@ -158,4 +168,22 @@ model File {
   uploader User @relation(fields: [uploaderId], references: [id])
 
   @@index([pageId])
+}
+
+// ─── Invites ────────────────────────────────────────────────────────────────
+
+model Invite {
+  id          String    @id @default(cuid())
+  email       String
+  token       String    @unique
+  role        Role      @default(EDITOR)
+  createdById String
+  createdAt   DateTime  @default(now())
+  usedAt      DateTime?
+  usedById    String?
+
+  createdBy User  @relation("InviteCreatedBy", fields: [createdById], references: [id], onDelete: Cascade)
+  usedBy    User? @relation("InviteRedeemedBy", fields: [usedById], references: [id])
+
+  @@index([email, usedAt])
 }

@@ -71,6 +71,7 @@ export type DbRow = {
   pageId: string
   schemaId: string
   properties: Record<string, unknown>
+  position: number
 }
 
 export type DbSchema = {
@@ -96,6 +97,51 @@ export type ApiKey = {
 }
 
 export type ApiKeyCreated = ApiKey & { key: string }
+
+export type UserRole = 'ADMIN' | 'EDITOR' | 'VIEWER'
+
+export type Invite = {
+  id: string
+  email: string
+  role: UserRole
+  token: string
+  createdAt: string
+  usedAt: string | null
+  createdBy: { name: string }
+  usedBy: { name: string } | null
+}
+
+export type InviteCreated = {
+  id: string
+  email: string
+  role: UserRole
+  token: string
+  createdAt: string
+}
+
+export type AdminPage = {
+  id: string
+  parentPageId: string | null
+  title: string
+  icon: string | null
+  isDatabase: boolean
+  isArchived: boolean
+  isPublic: boolean
+  updatedAt: string
+  createdBy: { id: string; name: string }
+  updatedBy: { id: string; name: string }
+}
+
+export type AdminDatabase = {
+  id: string
+  title: string
+  icon: string | null
+  isArchived: boolean
+  updatedAt: string
+  createdBy: { id: string; name: string }
+  columnCount: number
+  rowCount: number
+}
 
 export const api = {
   pages: {
@@ -125,6 +171,11 @@ export const api = {
         method: 'PATCH',
         body: JSON.stringify({ properties }),
       }),
+    reorderRow: (rowId: string, position: number) =>
+      request<DbRow>(`/api/databases/rows/${rowId}`, {
+        method: 'PATCH',
+        body: JSON.stringify({ position }),
+      }),
     deleteRow: (rowId: string) =>
       request<void>(`/api/databases/rows/${rowId}`, { method: 'DELETE' }),
     relatedRows: (pageId: string, ids: string[]) =>
@@ -150,5 +201,22 @@ export const api = {
     list: () => request<ApiKey[]>('/api/api-keys'),
     create: (name: string) => request<ApiKeyCreated>('/api/api-keys', { method: 'POST', body: JSON.stringify({ name }) }),
     delete: (id: string) => request<void>(`/api/api-keys/${id}`, { method: 'DELETE' }),
+  },
+  invites: {
+    list: () => request<Invite[]>('/api/admin/invites'),
+    create: (email: string, role: UserRole) =>
+      request<InviteCreated>('/api/admin/invites', { method: 'POST', body: JSON.stringify({ email, role }) }),
+    delete: (id: string) => request<void>(`/api/admin/invites/${id}`, { method: 'DELETE' }),
+    lookup: (token: string) => request<{ email: string; role: UserRole }>(`/api/invites/${token}`),
+  },
+  admin: {
+    pages: {
+      list: () => request<AdminPage[]>('/api/admin/pages'),
+      restore: (id: string) => request<void>(`/api/admin/pages/${id}/restore`, { method: 'POST' }),
+      purge: (id: string) => request<void>(`/api/admin/pages/${id}/purge`, { method: 'DELETE' }),
+    },
+    databases: {
+      list: () => request<AdminDatabase[]>('/api/admin/databases'),
+    },
   },
 }

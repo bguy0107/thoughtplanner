@@ -1,7 +1,24 @@
 'use client'
 
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { AlignLeft, ArrowDown, ArrowUp, Calendar, CheckSquare, ChevronDown, Hash, Link, Plus, RefreshCw, Tags, Trash2 } from 'lucide-react'
+import { AlignLeft, ArrowDown, ArrowUp, Calendar, CheckSquare, ChevronDown, GripVertical, Hash, Link, Plus, RefreshCw, Tags, Trash2 } from 'lucide-react'
+import {
+  DndContext,
+  closestCenter,
+  PointerSensor,
+  useSensor,
+  useSensors,
+  type DragEndEvent,
+} from '@dnd-kit/core'
+import {
+  SortableContext,
+  horizontalListSortingStrategy,
+  verticalListSortingStrategy,
+  arrayMove,
+  useSortable,
+} from '@dnd-kit/sortable'
+import { CSS } from '@dnd-kit/utilities'
+import { cn } from '@/lib/utils'
 import { api, type Column, type ColumnType, type DbRow, type DbSchema, type RelatedRow } from '@/lib/api'
 
 const TYPE_ICONS: Record<ColumnType, React.ReactNode> = {
@@ -61,9 +78,10 @@ interface Props {
   onDeleteRow: (rowId: string) => void
   onAddRow: (props?: Record<string, unknown>) => void
   onUpdateSchema: (columns: Column[]) => void
+  onReorderRows: (orderedIds: string[]) => void
 }
 
-export function TableView({ schema, onUpdateRow, onDeleteRow, onAddRow, onUpdateSchema }: Props) {
+export function TableView({ schema, onUpdateRow, onDeleteRow, onAddRow, onUpdateSchema, onReorderRows }: Props) {
   const [editing, setEditing] = useState<EditCell>(null)
   const [selectOpen, setSelectOpen] = useState<EditCell>(null)
   const [relationOpen, setRelationOpen] = useState<EditCell>(null)
@@ -73,6 +91,10 @@ export function TableView({ schema, onUpdateRow, onDeleteRow, onAddRow, onUpdate
   const [lockHeaders, setLockHeaders] = useState(true)
   const [lockFirstColumn, setLockFirstColumn] = useState(false)
   const inputRef = useRef<HTMLInputElement>(null)
+
+  const sensors = useSensors(
+    useSensor(PointerSensor, { activationConstraint: { distance: 6 } }),
+  )
 
   useEffect(() => {
     if (editing) inputRef.current?.focus()
@@ -108,6 +130,12 @@ export function TableView({ schema, onUpdateRow, onDeleteRow, onAddRow, onUpdate
         : filtered,
     [filtered, sort, colMap],
   )
+
+  // Reordering only makes sense against the rows'/columns' natural stored order —
+  // disable drag while a filter or sort is hiding/reshuffling what's on screen,
+  // since the dragged index wouldn't map cleanly back onto the full list.
+  const rowsSortable = !sort && !filter
+  const columnsSortable = !columnFilter
 
   function cycleSort(colId: string) {
     setSort((s) => {
@@ -172,6 +200,24 @@ export function TableView({ schema, onUpdateRow, onDeleteRow, onAddRow, onUpdate
     onUpdateSchema([...schema.columns, { id: crypto.randomUUID(), name: name.trim(), type: 'text' }])
   }
 
+  function handleColumnDragEnd(event: DragEndEvent) {
+    const { active, over } = event
+    if (!over || active.id === over.id) return
+    const oldIndex = visibleColumns.findIndex((c) => c.id === active.id)
+    const newIndex = visibleColumns.findIndex((c) => c.id === over.id)
+    if (oldIndex === -1 || newIndex === -1) return
+    onUpdateSchema(arrayMove(visibleColumns, oldIndex, newIndex))
+  }
+
+  function handleRowDragEnd(event: DragEndEvent) {
+    const { active, over } = event
+    if (!over || active.id === over.id) return
+    const oldIndex = sorted.findIndex((r) => r.id === active.id)
+    const newIndex = sorted.findIndex((r) => r.id === over.id)
+    if (oldIndex === -1 || newIndex === -1) return
+    onReorderRows(arrayMove(sorted, oldIndex, newIndex).map((r) => r.id))
+  }
+
   return (
     <div className="w-full">
       {/* Filter bar */}
@@ -214,6 +260,12 @@ export function TableView({ schema, onUpdateRow, onDeleteRow, onAddRow, onUpdate
           className="px-3 py-1.5 text-sm border border-gray-200 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-100 rounded-md outline-none focus:border-blue-300 focus:ring-1 focus:ring-blue-100 w-52"
         />
         <span className="text-xs text-gray-400 dark:text-gray-500">{visibleColumns.length} column{visibleColumns.length !== 1 ? 's' : ''}</span>
+        {!rowsSortable && (
+          <span className="text-xs text-gray-400 dark:text-gray-500">· clear filter/sort to drag-reorder rows</span>
+        )}
+        {!columnsSortable && (
+          <span className="text-xs text-gray-400 dark:text-gray-500">· clear column filter to drag-reorder columns</span>
+        )}
       </div>
 
       {/* Table */}
@@ -222,26 +274,22 @@ export function TableView({ schema, onUpdateRow, onDeleteRow, onAddRow, onUpdate
           <table className="w-full border-collapse text-sm">
             <thead>
               <tr className={`${lockHeaders ? 'sticky top-0 z-20' : ''} bg-[#f7f7f5] dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700`}>
-                {visibleColumns.map((col, i) => (
-                  <th
-                    key={col.id}
-                    style={{ minWidth: col.type === 'checkbox' ? 64 : 160 }}
-                    className={`text-left px-3 py-2 font-medium text-gray-600 dark:text-gray-300 border-r border-gray-200 dark:border-gray-700 last:border-r-0 whitespace-nowrap ${
-                      lockFirstColumn && i === 0 ? 'sticky left-0 z-30 bg-[#f7f7f5] dark:bg-gray-800' : ''
-                    }`}
-                  >
-                    <button
-                      onClick={() => cycleSort(col.id)}
-                      className="flex items-center gap-1.5 hover:text-gray-900 dark:hover:text-gray-100 transition-colors group"
-                    >
-                      <span className="text-gray-400 dark:text-gray-500">{TYPE_ICONS[col.type]}</span>
-                      {col.name}
-                      {sort?.colId === col.id
-                        ? sort.dir === 'asc' ? <ArrowUp size={11} /> : <ArrowDown size={11} />
-                        : <ArrowUp size={11} className="opacity-0 group-hover:opacity-25" />}
-                    </button>
-                  </th>
-                ))}
+                <th className="w-6 px-1 py-2" />
+                <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleColumnDragEnd}>
+                  <SortableContext items={visibleColumns.map((c) => c.id)} strategy={horizontalListSortingStrategy}>
+                    {visibleColumns.map((col, i) => (
+                      <SortableColumnHeader
+                        key={col.id}
+                        col={col}
+                        isFirst={i === 0}
+                        lockFirstColumn={lockFirstColumn}
+                        sortable={columnsSortable}
+                        sortState={sort}
+                        onCycleSort={cycleSort}
+                      />
+                    ))}
+                  </SortableContext>
+                </DndContext>
                 <th className="px-2 py-2 w-10 border-r border-gray-200 dark:border-gray-700">
                   <button
                     onClick={addColumn}
@@ -254,110 +302,37 @@ export function TableView({ schema, onUpdateRow, onDeleteRow, onAddRow, onUpdate
                 <th className="w-8" />
               </tr>
             </thead>
-            <tbody>
-              {sorted.map((row) => (
-                <tr key={row.id} className="border-b border-gray-100 dark:border-gray-800 last:border-b-0 hover:bg-[#fafafa] dark:hover:bg-gray-800/50 group">
-                  {visibleColumns.map((col, i) => (
-                    <td
-                      key={col.id}
-                      className={`px-3 py-2 border-r border-gray-100 dark:border-gray-800 last:border-r-0 cursor-text relative ${
-                        lockFirstColumn && i === 0
-                          ? 'sticky left-0 z-10 bg-white dark:bg-gray-900 group-hover:bg-[#fafafa] dark:group-hover:bg-gray-800/50'
-                          : ''
-                      }`}
-                      onClick={() => startEdit(row.id, col)}
-                    >
-                      {col.type === 'checkbox' ? (
-                        <input
-                          type="checkbox"
-                          checked={!!(getProp(row, col.id) as boolean)}
-                          onChange={() => toggleCheck(row, col.id)}
-                          onClick={(e) => e.stopPropagation()}
-                          className="cursor-pointer accent-blue-500"
-                        />
-                      ) : col.type === 'rollup' ? (
-                        <span className="text-gray-500 dark:text-gray-400 text-xs font-mono">
-                          {getProp(row, col.id) != null ? String(getProp(row, col.id)) : '—'}
-                        </span>
-                      ) : col.type === 'relation' ? (
-                        <div className="relative">
-                          <RelationCell
-                            row={row}
-                            col={col}
-                            isOpen={relationOpen?.rowId === row.id && relationOpen?.colId === col.id}
-                            onToggle={(targetRowId) => toggleRelation(row, col.id, targetRowId)}
-                            onClose={() => setRelationOpen(null)}
-                          />
-                        </div>
-                      ) : editing?.rowId === row.id && editing?.colId === col.id ? (
-                        <input
-                          ref={inputRef}
-                          type={col.type === 'number' ? 'number' : col.type === 'date' ? 'date' : 'text'}
-                          defaultValue={displayValue(row, col)}
-                          onBlur={(e) => commitEdit(row, col.id, e.target.value)}
-                          onKeyDown={(e) => {
-                            if (e.key === 'Enter') (e.target as HTMLInputElement).blur()
-                            if (e.key === 'Escape') setEditing(null)
-                          }}
-                          onClick={(e) => e.stopPropagation()}
-                          className="w-full outline-none bg-transparent"
-                        />
-                      ) : col.type === 'select' ? (
-                        <div className="relative">
-                          {getProp(row, col.id)
-                            ? <span className={`px-2 py-0.5 rounded text-xs font-medium ${chipColor(col.options ?? [], getProp(row, col.id) as string)}`}>{getProp(row, col.id) as string}</span>
-                            : <span className="text-gray-300 dark:text-gray-600 text-xs">—</span>}
-                          {selectOpen?.rowId === row.id && selectOpen?.colId === col.id && (
-                            <OptionDropdown
-                              options={col.options ?? []}
-                              selected={[getProp(row, col.id) as string].filter(Boolean)}
-                              isMulti={false}
-                              onSelect={(v) => setSelect(row, col.id, v)}
-                              onClose={() => setSelectOpen(null)}
-                            />
-                          )}
-                        </div>
-                      ) : col.type === 'multi_select' ? (
-                        <div className="relative">
-                          <div className="flex flex-wrap gap-1 min-h-[20px]">
-                            {((getProp(row, col.id) as string[] | null) ?? []).map((opt) => (
-                              <span key={opt} className={`px-2 py-0.5 rounded text-xs font-medium ${chipColor(col.options ?? [], opt)}`}>{opt}</span>
-                            ))}
-                            {!((getProp(row, col.id) as string[] | null) ?? []).length && (
-                              <span className="text-gray-300 dark:text-gray-600 text-xs">—</span>
-                            )}
-                          </div>
-                          {selectOpen?.rowId === row.id && selectOpen?.colId === col.id && (
-                            <OptionDropdown
-                              options={col.options ?? []}
-                              selected={(getProp(row, col.id) as string[] | null) ?? []}
-                              isMulti={true}
-                              onToggle={(v) => toggleMulti(row, col.id, v)}
-                              onClear={() => clearMulti(row, col.id)}
-                              onClose={() => setSelectOpen(null)}
-                            />
-                          )}
-                        </div>
-                      ) : (
-                        <span className={displayValue(row, col) ? 'text-gray-800 dark:text-gray-200' : 'text-gray-300 dark:text-gray-600 text-xs'}>
-                          {displayValue(row, col) || '—'}
-                        </span>
-                      )}
-                    </td>
+            <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleRowDragEnd}>
+              <SortableContext items={sorted.map((r) => r.id)} strategy={verticalListSortingStrategy}>
+                <tbody>
+                  {sorted.map((row) => (
+                    <SortableRow
+                      key={row.id}
+                      row={row}
+                      visibleColumns={visibleColumns}
+                      colMap={colMap}
+                      lockFirstColumn={lockFirstColumn}
+                      sortable={rowsSortable}
+                      editing={editing}
+                      selectOpen={selectOpen}
+                      relationOpen={relationOpen}
+                      inputRef={inputRef}
+                      onStartEdit={startEdit}
+                      onCommitEdit={commitEdit}
+                      onCancelEdit={() => setEditing(null)}
+                      onToggleCheck={toggleCheck}
+                      onSetSelect={setSelect}
+                      onToggleMulti={toggleMulti}
+                      onClearMulti={clearMulti}
+                      onToggleRelation={toggleRelation}
+                      onCloseSelect={() => setSelectOpen(null)}
+                      onCloseRelation={() => setRelationOpen(null)}
+                      onDeleteRow={onDeleteRow}
+                    />
                   ))}
-                  <td className="border-r border-gray-100 dark:border-gray-800" />
-                  <td className="pr-2 text-right">
-                    <button
-                      onClick={() => onDeleteRow(row.id)}
-                      title="Delete row"
-                      className="p-1 rounded hover:bg-red-50 dark:hover:bg-red-950/50 text-transparent group-hover:text-gray-300 dark:group-hover:text-gray-600 hover:!text-red-500 transition-colors"
-                    >
-                      <Trash2 size={13} />
-                    </button>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
+                </tbody>
+              </SortableContext>
+            </DndContext>
           </table>
         </div>
 
@@ -370,6 +345,219 @@ export function TableView({ schema, onUpdateRow, onDeleteRow, onAddRow, onUpdate
         </button>
       </div>
     </div>
+  )
+}
+
+// ─── SortableColumnHeader ──────────────────────────────────────────────────────
+
+interface SortableColumnHeaderProps {
+  col: Column
+  isFirst: boolean
+  lockFirstColumn: boolean
+  sortable: boolean
+  sortState: SortState
+  onCycleSort: (colId: string) => void
+}
+
+function SortableColumnHeader({ col, isFirst, lockFirstColumn, sortable, sortState, onCycleSort }: SortableColumnHeaderProps) {
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
+    id: col.id,
+    disabled: !sortable,
+  })
+
+  const style = sortable ? { transform: CSS.Transform.toString(transform), transition } : undefined
+
+  return (
+    <th
+      ref={setNodeRef}
+      style={{ ...style, minWidth: col.type === 'checkbox' ? 64 : 160 }}
+      className={cn(
+        'text-left px-3 py-2 font-medium text-gray-600 dark:text-gray-300 border-r border-gray-200 dark:border-gray-700 last:border-r-0 whitespace-nowrap',
+        lockFirstColumn && isFirst && 'sticky left-0 z-30 bg-[#f7f7f5] dark:bg-gray-800',
+        isDragging && 'opacity-50 z-40 relative',
+      )}
+    >
+      <div className="flex items-center gap-1 group">
+        {sortable && (
+          <span
+            {...attributes}
+            {...listeners}
+            className="flex-shrink-0 text-gray-300 dark:text-gray-600 opacity-0 group-hover:opacity-100 hover:!text-gray-500 dark:hover:!text-gray-400 cursor-grab active:cursor-grabbing touch-none"
+          >
+            <GripVertical size={12} />
+          </span>
+        )}
+        <button
+          onClick={() => onCycleSort(col.id)}
+          className="flex items-center gap-1.5 hover:text-gray-900 dark:hover:text-gray-100 transition-colors group/sort"
+        >
+          <span className="text-gray-400 dark:text-gray-500">{TYPE_ICONS[col.type]}</span>
+          {col.name}
+          {sortState?.colId === col.id
+            ? sortState.dir === 'asc' ? <ArrowUp size={11} /> : <ArrowDown size={11} />
+            : <ArrowUp size={11} className="opacity-0 group-hover/sort:opacity-25" />}
+        </button>
+      </div>
+    </th>
+  )
+}
+
+// ─── SortableRow ───────────────────────────────────────────────────────────────
+
+interface SortableRowProps {
+  row: DbRow
+  visibleColumns: Column[]
+  colMap: Map<string, Column>
+  lockFirstColumn: boolean
+  sortable: boolean
+  editing: EditCell
+  selectOpen: EditCell
+  relationOpen: EditCell
+  inputRef: React.RefObject<HTMLInputElement | null>
+  onStartEdit: (rowId: string, col: Column) => void
+  onCommitEdit: (row: DbRow, colId: string, raw: string) => void
+  onCancelEdit: () => void
+  onToggleCheck: (row: DbRow, colId: string) => void
+  onSetSelect: (row: DbRow, colId: string, value: string) => void
+  onToggleMulti: (row: DbRow, colId: string, value: string) => void
+  onClearMulti: (row: DbRow, colId: string) => void
+  onToggleRelation: (row: DbRow, colId: string, targetRowId: string) => void
+  onCloseSelect: () => void
+  onCloseRelation: () => void
+  onDeleteRow: (rowId: string) => void
+}
+
+function SortableRow({
+  row, visibleColumns, colMap, lockFirstColumn, sortable, editing, selectOpen, relationOpen, inputRef,
+  onStartEdit, onCommitEdit, onCancelEdit, onToggleCheck, onSetSelect, onToggleMulti, onClearMulti,
+  onToggleRelation, onCloseSelect, onCloseRelation, onDeleteRow,
+}: SortableRowProps) {
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
+    id: row.id,
+    disabled: !sortable,
+  })
+
+  const style = sortable ? { transform: CSS.Transform.toString(transform), transition } : undefined
+
+  return (
+    <tr
+      ref={setNodeRef}
+      style={style}
+      className={cn(
+        'border-b border-gray-100 dark:border-gray-800 last:border-b-0 hover:bg-[#fafafa] dark:hover:bg-gray-800/50 group',
+        isDragging && 'opacity-50 z-40 relative bg-white dark:bg-gray-900',
+      )}
+    >
+      <td className="w-6 px-1">
+        {sortable && (
+          <span
+            {...attributes}
+            {...listeners}
+            className="flex-shrink-0 text-gray-300 dark:text-gray-600 opacity-0 group-hover:opacity-100 hover:!text-gray-500 dark:hover:!text-gray-400 cursor-grab active:cursor-grabbing touch-none"
+          >
+            <GripVertical size={12} />
+          </span>
+        )}
+      </td>
+      {visibleColumns.map((col, i) => (
+        <td
+          key={col.id}
+          className={`px-3 py-2 border-r border-gray-100 dark:border-gray-800 last:border-r-0 cursor-text relative ${
+            lockFirstColumn && i === 0
+              ? 'sticky left-0 z-10 bg-white dark:bg-gray-900 group-hover:bg-[#fafafa] dark:group-hover:bg-gray-800/50'
+              : ''
+          }`}
+          onClick={() => onStartEdit(row.id, col)}
+        >
+          {col.type === 'checkbox' ? (
+            <input
+              type="checkbox"
+              checked={!!(getProp(row, col.id) as boolean)}
+              onChange={() => onToggleCheck(row, col.id)}
+              onClick={(e) => e.stopPropagation()}
+              className="cursor-pointer accent-blue-500"
+            />
+          ) : col.type === 'rollup' ? (
+            <span className="text-gray-500 dark:text-gray-400 text-xs font-mono">
+              {getProp(row, col.id) != null ? String(getProp(row, col.id)) : '—'}
+            </span>
+          ) : col.type === 'relation' ? (
+            <div className="relative">
+              <RelationCell
+                row={row}
+                col={col}
+                isOpen={relationOpen?.rowId === row.id && relationOpen?.colId === col.id}
+                onToggle={(targetRowId) => onToggleRelation(row, col.id, targetRowId)}
+                onClose={onCloseRelation}
+              />
+            </div>
+          ) : editing?.rowId === row.id && editing?.colId === col.id ? (
+            <input
+              ref={inputRef}
+              type={col.type === 'number' ? 'number' : col.type === 'date' ? 'date' : 'text'}
+              defaultValue={displayValue(row, col)}
+              onBlur={(e) => onCommitEdit(row, col.id, e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') (e.target as HTMLInputElement).blur()
+                if (e.key === 'Escape') onCancelEdit()
+              }}
+              onClick={(e) => e.stopPropagation()}
+              className="w-full outline-none bg-transparent"
+            />
+          ) : col.type === 'select' ? (
+            <div className="relative">
+              {getProp(row, col.id)
+                ? <span className={`px-2 py-0.5 rounded text-xs font-medium ${chipColor(col.options ?? [], getProp(row, col.id) as string)}`}>{getProp(row, col.id) as string}</span>
+                : <span className="text-gray-300 dark:text-gray-600 text-xs">—</span>}
+              {selectOpen?.rowId === row.id && selectOpen?.colId === col.id && (
+                <OptionDropdown
+                  options={col.options ?? []}
+                  selected={[getProp(row, col.id) as string].filter(Boolean)}
+                  isMulti={false}
+                  onSelect={(v) => onSetSelect(row, col.id, v)}
+                  onClose={onCloseSelect}
+                />
+              )}
+            </div>
+          ) : col.type === 'multi_select' ? (
+            <div className="relative">
+              <div className="flex flex-wrap gap-1 min-h-[20px]">
+                {((getProp(row, col.id) as string[] | null) ?? []).map((opt) => (
+                  <span key={opt} className={`px-2 py-0.5 rounded text-xs font-medium ${chipColor(col.options ?? [], opt)}`}>{opt}</span>
+                ))}
+                {!((getProp(row, col.id) as string[] | null) ?? []).length && (
+                  <span className="text-gray-300 dark:text-gray-600 text-xs">—</span>
+                )}
+              </div>
+              {selectOpen?.rowId === row.id && selectOpen?.colId === col.id && (
+                <OptionDropdown
+                  options={col.options ?? []}
+                  selected={(getProp(row, col.id) as string[] | null) ?? []}
+                  isMulti={true}
+                  onToggle={(v) => onToggleMulti(row, col.id, v)}
+                  onClear={() => onClearMulti(row, col.id)}
+                  onClose={onCloseSelect}
+                />
+              )}
+            </div>
+          ) : (
+            <span className={displayValue(row, col) ? 'text-gray-800 dark:text-gray-200' : 'text-gray-300 dark:text-gray-600 text-xs'}>
+              {displayValue(row, col) || '—'}
+            </span>
+          )}
+        </td>
+      ))}
+      <td className="border-r border-gray-100 dark:border-gray-800" />
+      <td className="pr-2 text-right">
+        <button
+          onClick={() => onDeleteRow(row.id)}
+          title="Delete row"
+          className="p-1 rounded hover:bg-red-50 dark:hover:bg-red-950/50 text-transparent group-hover:text-gray-300 dark:group-hover:text-gray-600 hover:!text-red-500 transition-colors"
+        >
+          <Trash2 size={13} />
+        </button>
+      </td>
+    </tr>
   )
 }
 

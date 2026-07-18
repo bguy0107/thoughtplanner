@@ -14,6 +14,8 @@ import { wsRoutes } from './routes/ws.js'
 import { apiKeyRoutes } from './routes/api-keys.js'
 import { v1Routes } from './routes/v1.js'
 import { importRoutes } from './routes/import.js'
+import { inviteRoutes } from './routes/invites.js'
+import { adminRoutes } from './routes/admin.js'
 import { ensureBucket } from './lib/minio.js'
 
 if (
@@ -54,6 +56,8 @@ await app.register(wsRoutes)
 await app.register(apiKeyRoutes)
 await app.register(v1Routes)
 await app.register(importRoutes)
+await app.register(inviteRoutes)
+await app.register(adminRoutes)
 
 app.get('/health', async () => ({ status: 'ok' }))
 

@@ -54,6 +54,21 @@ export function DatabaseView({ page, onTitleChange }: Props) {
     setSchema((s) => s ? { ...s, rows: s.rows.filter((r) => r.id !== rowId) } : s)
   }, [])
 
+  const handleReorderRows = useCallback(async (orderedIds: string[]) => {
+    setSchema((s) => {
+      if (!s) return s
+      const rowMap = new Map(s.rows.map((r) => [r.id, r]))
+      const reordered = orderedIds
+        .map((id, i) => {
+          const row = rowMap.get(id)
+          return row ? { ...row, position: i } : null
+        })
+        .filter((r): r is (typeof s.rows)[number] => r != null)
+      return { ...s, rows: reordered }
+    })
+    await Promise.all(orderedIds.map((id, i) => api.databases.reorderRow(id, i)))
+  }, [])
+
   const views: { mode: ViewMode; label: string; icon: React.ReactNode }[] = [
     { mode: 'table', label: 'Table', icon: <LayoutList size={14} /> },
     { mode: 'board', label: 'Board', icon: <Columns3 size={14} /> },
@@ -132,6 +147,7 @@ export function DatabaseView({ page, onTitleChange }: Props) {
                 onDeleteRow={handleDeleteRow}
                 onAddRow={handleAddRow}
                 onUpdateSchema={handleUpdateSchema}
+                onReorderRows={handleReorderRows}
               />
             ) : view === 'board' ? (
               <BoardView
