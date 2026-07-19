@@ -143,6 +143,49 @@ Adds the `ApiKey` table to the database.
 
 ---
 
+## Phase 5 — Multi-workspace, Admin Panel & Editor Blocks ✅ Complete
+
+- [x] Dark mode across the app (Tailwind `dark:` variants + theme toggle)
+- [x] Table view: sticky header, locked/frozen first column
+- [x] Table view: per-column filter search (text search scoped to one column)
+- [x] Security hardening — gated signup after first Admin claim, TLS/cert handling, upload XSS sanitization, dependency + secrets audit
+- [x] Database table rows/columns: drag-to-reorder via dnd-kit, backed by `DatabaseRow.position`
+- [x] Admin panel — Users/Pages/Databases tabs backed by better-auth's `admin` plugin (role changes, account deactivation)
+- [x] Single-use, email-bound invite links (gates signup once an Admin account exists)
+- [x] Performance pass — database rollups, ZIP/spreadsheet imports, search, and sidebar/table rendering
+- [x] **Multi-workspace support** — new `Workspace` / `WorkspaceMember` models; pages, databases, and public sharing are scoped per-workspace instead of globally
+- [x] Workspace switcher in the sidebar + "create workspace" flow; users with no workspace see a prompt to create/join one
+- [x] Per-workspace roles (Admin/Editor/Viewer), independent of the site-wide `User.role`, managed from **Settings → Members**
+- [x] Paste-to-upload — pasting an image into the editor uploads it through the existing file pipeline and inserts it inline
+- [x] Per-block drag handle in the editor (`tiptap-extension-global-drag-handle`) — reorder any block
+- [x] Click-to-select-and-delete blocks — a companion `BlockClickSelect` extension turns a handle click into a `NodeSelection` so Backspace/Delete removes the block
+- [x] Bubble/selection toolbar scoped to text selections only (no longer appears over a selected block)
+- [x] Code blocks — one-click copy-to-clipboard button
+- [x] `/link`, `/pdf`, `/file` slash commands — a shared embed node type with SSRF-guarded URL fetching (blocks private IPs, internal Docker hostnames, and metadata endpoints)
+- [x] Link embeds render an Open Graph preview card, or an inline YouTube/Vimeo player when the URL matches a known video provider
+- [x] PDF embeds get an inline viewer; file embeds get a downloadable attachment card
+
+**Schema changes:**
+- `Workspace`, `WorkspaceMember` models; `Page.workspaceId` — on a database with pre-existing Users/Pages, a plain `db:push` fails because `workspaceId` is required. Follow the ordered steps documented at the top of `apps/api/prisma/backfill-workspaces.sql` (temporarily nullable column → `db:push` → run the script → revert to required → `db:push` again) instead. A brand-new/empty database can just run `db:push` directly.
+- `DatabaseRow.position` for row ordering
+
+**New API routes:**
+- `GET/POST/PATCH/DELETE /api/workspaces`, `POST/PATCH/DELETE /api/workspaces/:id/members` — workspace CRUD + per-workspace role management
+- `GET /api/admin/pages`, `POST /api/admin/pages/:id/restore`, `DELETE /api/admin/pages/:id/purge`, `GET /api/admin/databases` — admin oversight (`apps/api/src/routes/admin.ts`)
+- `GET/POST/DELETE /api/admin/invites`, `GET /api/invites/:token` (redeem) — invite links (`apps/api/src/routes/invites.ts`)
+- `POST /api/pages/:pageId/embed-metadata` — SSRF-guarded link/video unfurling for the embed block (`apps/api/src/routes/embeds.ts`)
+
+**New frontend files:**
+- `components/sidebar/WorkspaceSwitcher.tsx`, `components/sidebar/CreateWorkspaceModal.tsx`
+- `components/settings/WorkspacePanel.tsx`, `components/settings/WorkspaceMembersPanel.tsx`
+- `components/settings/UsersPanel.tsx`, `components/settings/PagesPanel.tsx`, `components/settings/DatabasesPanel.tsx`
+- `store/workspace.ts`
+- `components/editor/extensions/BlockClickSelect.ts`, `components/editor/extensions/Embed.ts`
+- `components/editor/EmbedView.tsx`, `components/editor/CodeBlockView.tsx`
+- `lib/embeds.ts` (API — Open Graph/oEmbed fetching + SSRF guard)
+
+---
+
 ## First Boot Instructions
 
 ```bash

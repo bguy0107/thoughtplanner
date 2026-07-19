@@ -13,11 +13,14 @@ Compose command on your home network or a VPS.
 ### Pages & editor
 - Nested page tree (infinite sub-pages), drag-to-reorder in the sidebar
 - Rich text editor (TipTap) with debounced autosave
-- Slash commands (`/`) — headings, lists, to-dos, code blocks, quotes, dividers, images
-- Bubble/selection toolbar — bold, italic, underline, strikethrough, code, highlight, links
+- Slash commands (`/`) — headings, lists, to-dos, code blocks, quotes, dividers, images, PDFs, files, link previews, nested databases
+- Per-block drag handle — reorder any block, or click the handle to select and delete it (Backspace/Delete)
+- Bubble/selection toolbar — bold, italic, underline, strikethrough, code, highlight, links (only shown for text selections, not selected blocks)
+- Code blocks with syntax highlighting and a one-click copy-to-clipboard button
+- Link embeds — SSRF-guarded Open Graph preview cards, with inline YouTube/Vimeo video embeds for recognized video links; plus an inline PDF viewer and downloadable file attachments
 - Page icons (emoji picker) and full-width cover images
 - Markdown import/export per page
-- File & image uploads, stored in MinIO
+- File & image uploads, stored in MinIO — including paste-to-upload images directly into the editor
 - Full-text title search with a Ctrl+K command palette
 - Public read-only page sharing via shareable link
 - Soft-delete (archive) with admin restore/purge
@@ -32,13 +35,17 @@ Compose command on your home network or a VPS.
 - Import from Excel/CSV spreadsheets
 - Import from a Notion export (ZIP of pages + databases)
 
-### Collaboration & real-time
+### Workspaces & collaboration
+- Multiple workspaces per instance — sidebar switcher to create and jump between them
+- Per-workspace membership with its own Admin / Editor / Viewer role per member, independent of the site-wide role
+- Pages, databases, and sharing are scoped to the current workspace
 - WebSocket sync — page content broadcasts to all connected viewers (last-write-wins)
-- Multi-user workspace with email/password auth (Better Auth), 30-day sessions
+- Email/password auth (Better Auth), 30-day sessions
 
 ### Admin & access control
-- Roles: Admin / Editor / Viewer
+- Site-wide roles: Admin / Editor / Viewer
 - Admin Settings panel — manage users (role changes, deactivation), browse/restore/purge archived pages, database inventory
+- Workspace Settings panel (workspace admins) — rename/delete workspace, manage member roles
 - Single-use, email-bound invite links (signup is gated after the first account claims Admin)
 - Personal API keys + a versioned REST API (`/api/v1`) for reading your own pages and databases as JSON or Markdown
 
@@ -80,9 +87,12 @@ docker compose exec api pnpm db:push
 open http://localhost:3000
 ```
 
-The **first account you sign up** automatically becomes the workspace Admin.
+The **first account you sign up** automatically becomes the site-wide Admin.
 After that, `ALLOW_SIGNUP` in `.env` is effectively closed — invite additional
 users from **Settings → Users** as Admin instead of leaving open signup on.
+A new account isn't in any workspace yet — create one from the prompt on
+first login (you become that workspace's Admin), or have an existing
+workspace Admin add you as a member from **Settings → Members**.
 
 ### Accessing it from other devices on your network
 
@@ -167,6 +177,11 @@ apply it after pulling:
 ```bash
 docker compose exec api pnpm db:push
 ```
+
+The workspace layer (`Page.workspaceId`) is a special case on a database that
+already has users/pages in it — a plain `db:push` fails because the column is
+required. See the ordered steps in `apps/api/prisma/backfill-workspaces.sql`.
+A fresh/empty database doesn't need this — just run `db:push`.
 
 ---
 
