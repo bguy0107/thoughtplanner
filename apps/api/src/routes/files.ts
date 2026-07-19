@@ -60,8 +60,13 @@ export async function fileRoutes(app: FastifyInstance) {
       const data = await req.file()
       if (!data) return reply.status(400).send({ error: 'No file uploaded' })
 
-      const ext = data.filename.split('.').pop() ?? ''
-      const storageKey = `${req.params.pageId}/${randomUUID()}.${ext}`
+      // Only alphanumerics survive — the raw extension is attacker-controlled
+      // (from the uploaded filename) and must never be able to inject `/` or
+      // `..` segments into the storage key, which is otherwise trusted to stay
+      // within this page's own key prefix.
+      const rawExt = data.filename.split('.').pop() ?? ''
+      const ext = rawExt.replace(/[^a-zA-Z0-9]/g, '').slice(0, 16)
+      const storageKey = `${req.params.pageId}/${randomUUID()}${ext ? `.${ext}` : ''}`
 
       // size is unknown upfront for streams; content-type is recorded in the db.
       // metaData controls what MinIO actually serves the object as — never trust

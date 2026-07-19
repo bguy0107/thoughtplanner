@@ -94,4 +94,32 @@ export async function inviteRoutes(app: FastifyInstance) {
 
     return { email: invite.email, role: invite.role }
   })
+
+  // POST /api/invites/:token/redeem — grant the invite's role to the caller.
+  // This is the only place a signup's elevated role is actually granted (see
+  // the comment on the create hook in lib/auth.ts): the caller must already be
+  // authenticated AND present the real token AND be signed in as the exact
+  // email the invite was issued to. Knowing the email alone is not enough.
+  app.post<{ Params: { token: string } }>('/api/invites/:token/redeem', async (req, reply) => {
+    const session = await getSession(req)
+    if (!session) return reply.status(401).send({ error: 'Unauthorized' })
+
+    const invite = await prisma.invite.findUnique({ where: { token: req.params.token } })
+    if (!invite || invite.usedAt) return reply.status(404).send({ error: 'Invite not found or already used' })
+    if (invite.email.toLowerCase() !== session.user.email.toLowerCase()) {
+      return reply.status(403).send({ error: 'This invite was issued for a different email address' })
+    }
+
+    // Atomic claim, same pattern as the last-admin guards in workspaces.ts —
+    // a concurrent redeem of the same token must not grant the role twice.
+    const claim = await prisma.invite.updateMany({
+      where: { id: invite.id, usedAt: null },
+      data: { usedAt: new Date(), usedById: session.user.id },
+    })
+    if (claim.count === 0) return reply.status(409).send({ error: 'Invite already used' })
+
+    await prisma.user.update({ where: { id: session.user.id }, data: { role: invite.role } })
+
+    return { role: invite.role }
+  })
 }

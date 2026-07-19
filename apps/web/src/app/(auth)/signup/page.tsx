@@ -47,12 +47,27 @@ function SignupForm() {
     setLoading(true)
     setError('')
     const result = await signUp.email({ name, email, password })
-    setLoading(false)
     if (result.error) {
+      setLoading(false)
       setError(result.error.message ?? 'Could not create account')
-    } else {
-      router.push('/home')
+      return
     }
+
+    // The account is created with only the default role at this point — the
+    // invite's role is granted here, now that we're authenticated as its
+    // exact email and can present the token. See lib/auth.ts for why the
+    // role isn't granted during account creation itself.
+    if (inviteToken) {
+      try {
+        await api.invites.redeem(inviteToken)
+      } catch {
+        // Account still exists even if this fails (e.g. invite already used) —
+        // let the user in rather than stranding them on the signup form.
+      }
+    }
+
+    setLoading(false)
+    router.push('/home')
   }
 
   return (

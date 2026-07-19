@@ -252,6 +252,7 @@ export const api = {
       request<InviteCreated>('/api/admin/invites', { method: 'POST', body: JSON.stringify({ email, role }) }),
     delete: (id: string) => request<void>(`/api/admin/invites/${id}`, { method: 'DELETE' }),
     lookup: (token: string) => request<{ email: string; role: UserRole }>(`/api/invites/${token}`),
+    redeem: (token: string) => request<{ role: UserRole }>(`/api/invites/${token}/redeem`, { method: 'POST' }),
   },
   admin: {
     pages: {

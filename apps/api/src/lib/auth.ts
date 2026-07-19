@@ -3,13 +3,6 @@ import { admin } from 'better-auth/plugins'
 import { prismaAdapter } from 'better-auth/adapters/prisma'
 import { prisma } from './prisma.js'
 
-// better-auth's create hooks don't share context between `before` and `after`
-// for the same signup request, so this in-memory map bridges "which invite (if
-// any) actually granted this role" from before() to after() — see the create
-// hook below. Requests for the same email can't race each other in a way that
-// matters here since email uniqueness on User already serializes them.
-const pendingInviteClaims = new Map<string, string>()
-
 export const auth = betterAuth({
   database: prismaAdapter(prisma, {
     provider: 'postgresql',
@@ -46,8 +39,15 @@ export const auth = betterAuth({
         // Gate self-service sign-up behind ALLOW_SIGNUP so a random visitor can't
         // create an account and get full EDITOR access to every page. The very
         // first account (workspace owner) is always allowed through and promoted
-        // to ADMIN. A pending invite (matched by email) bypasses ALLOW_SIGNUP and
-        // sets the role the admin picked when generating the invite link.
+        // to ADMIN. A pending invite for this email also bypasses ALLOW_SIGNUP —
+        // so an invited person can still create an account on a closed instance —
+        // but NEVER grants the invite's role here. Matching by email alone isn't
+        // proof of anything (email ownership isn't verified at signup), so the
+        // elevated role is only ever granted by POST /api/invites/:token/redeem,
+        // which requires presenting the actual unguessable token. Every account
+        // created through this hook starts at the default EDITOR role with zero
+        // workspace memberships, so it has no access to anything until an admin
+        // (or a redeemed invite) grants some.
         async before(user) {
           // Atomic claim: a plain `count(User) === 0` check-then-act would let
           // two concurrent signups on a fresh instance both see "no users yet"
@@ -66,38 +66,19 @@ export const auth = betterAuth({
             return { data: { ...user, role: 'ADMIN' } }
           }
 
-          const invite = await prisma.invite.findFirst({
-            where: { email: user.email, usedAt: null },
-          })
-
-          if (invite) {
-            pendingInviteClaims.set(user.email, invite.id)
-            return { data: { ...user, role: invite.role } }
-          }
-
           if (process.env.ALLOW_SIGNUP !== 'true') {
-            throw new APIError('FORBIDDEN', {
-              message: 'Public sign-up is disabled. Ask a workspace admin to invite you.',
+            const hasPendingInvite = await prisma.invite.findFirst({
+              where: { email: user.email, usedAt: null },
+              select: { id: true },
             })
+            if (!hasPendingInvite) {
+              throw new APIError('FORBIDDEN', {
+                message: 'Public sign-up is disabled. Ask a workspace admin to invite you.',
+              })
+            }
           }
 
           return { data: { ...user, role: 'EDITOR' } }
-        },
-        // Marks the invite consumed now that the user record actually exists —
-        // creation could still fail after `before` (e.g. duplicate email), so
-        // this must not happen until we know the account was really created.
-        // Only consumes the invite that actually granted this role (tracked
-        // via pendingInviteClaims) — a signup that got in through the
-        // first-admin or open-signup path must not silently burn an unrelated
-        // pending invite for the same email.
-        async after(user) {
-          const inviteId = pendingInviteClaims.get(user.email)
-          if (!inviteId) return
-          pendingInviteClaims.delete(user.email)
-          await prisma.invite.updateMany({
-            where: { id: inviteId, usedAt: null },
-            data: { usedAt: new Date(), usedById: user.id },
-          })
         },
       },
     },
