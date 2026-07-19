@@ -1,7 +1,7 @@
 'use client'
 
 import { forwardRef, useCallback, useImperativeHandle, useRef } from 'react'
-import { useEditor, EditorContent, ReactRenderer, type AnyExtension } from '@tiptap/react'
+import { useEditor, EditorContent, ReactRenderer, ReactNodeViewRenderer, type AnyExtension } from '@tiptap/react'
 import type { SuggestionProps, SuggestionKeyDownProps } from '@tiptap/suggestion'
 import StarterKit from '@tiptap/starter-kit'
 import Placeholder from '@tiptap/extension-placeholder'
@@ -17,6 +17,8 @@ import tippy, { type Instance as TippyInstance } from 'tippy.js'
 import { Markdown } from 'tiptap-markdown'
 import GlobalDragHandle from 'tiptap-extension-global-drag-handle'
 import { BlockClickSelect } from './extensions/BlockClickSelect'
+import { CodeBlockView } from './CodeBlockView'
+import { Embed } from './extensions/Embed'
 import { SlashCommand } from './extensions/SlashCommand'
 import { SlashCommandMenu, type SlashCommandMenuHandle } from './SlashCommandMenu'
 import { BubbleMenuBar } from './BubbleMenuBar'
@@ -69,10 +71,15 @@ export const Editor = forwardRef<EditorHandle, EditorProps>(function Editor(
       TaskList,
       TaskItem.configure({ nested: true }),
       Image.configure({ inline: false, allowBase64: false }),
+      Embed.configure({ pageId }),
       Link.configure({ openOnClick: false }),
       Underline,
       Highlight,
-      CodeBlockLowlight.configure({ lowlight }),
+      CodeBlockLowlight.extend({
+        addNodeView() {
+          return ReactNodeViewRenderer(CodeBlockView)
+        },
+      }).configure({ lowlight }),
       Markdown.configure({ html: false, transformPastedText: true }),
       ...(!readOnly ? [GlobalDragHandle.configure({ dragHandleWidth: 20, scrollTreshold: 100 }), BlockClickSelect] as AnyExtension[] : []),
       ...(!readOnly ? [SlashCommand.configure({
@@ -91,6 +98,9 @@ export const Editor = forwardRef<EditorHandle, EditorProps>(function Editor(
               { title: 'Blockquote', description: 'Indented quote', icon: '"', command: (e: ReturnType<typeof useEditor>) => e?.chain().focus().toggleBlockquote().run() },
               { title: 'Divider', description: 'Horizontal rule', icon: '—', command: (e: ReturnType<typeof useEditor>) => e?.chain().focus().setHorizontalRule().run() },
               { title: 'Image', description: 'Upload an image', icon: '🖼', command: () => document.getElementById('tp-image-upload')?.click() },
+              { title: 'PDF', description: 'Upload a PDF', icon: '📄', command: () => document.getElementById('tp-pdf-upload')?.click() },
+              { title: 'File', description: 'Upload a file others can download', icon: '📎', command: () => document.getElementById('tp-file-upload')?.click() },
+              { title: 'Link', description: 'Embed a link preview', icon: '🔗', command: (e: ReturnType<typeof useEditor>) => e?.chain().focus().insertEmbed({ embedType: 'link' }).run() },
               {
                 title: 'Database',
                 description: 'Create a new database page',
@@ -183,6 +193,37 @@ export const Editor = forwardRef<EditorHandle, EditorProps>(function Editor(
     editor.chain().focus().setImage({ src: uploaded.url, alt: file.name }).run()
   }
 
+  async function handlePdfUpload(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0]
+    if (!file || !editor) return
+    e.target.value = ''
+    const uploaded = await api.files.upload(pageId, file)
+    editor
+      .chain()
+      .focus()
+      .insertEmbed({ embedType: 'pdf', status: 'ready', url: uploaded.url, embedUrl: uploaded.url, title: file.name })
+      .run()
+  }
+
+  async function handleFileUpload(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0]
+    if (!file || !editor) return
+    e.target.value = ''
+    const uploaded = await api.files.upload(pageId, file)
+    editor
+      .chain()
+      .focus()
+      .insertEmbed({
+        embedType: 'file',
+        status: 'ready',
+        url: uploaded.url,
+        title: uploaded.filename,
+        fileSize: uploaded.size,
+        mimeType: uploaded.mimeType,
+      })
+      .run()
+  }
+
   return (
     <div className="relative">
       {!readOnly && editor && <BubbleMenuBar editor={editor} />}
@@ -193,6 +234,23 @@ export const Editor = forwardRef<EditorHandle, EditorProps>(function Editor(
           accept="image/*"
           className="hidden"
           onChange={handleImageUpload}
+        />
+      )}
+      {!readOnly && (
+        <input
+          id="tp-pdf-upload"
+          type="file"
+          accept="application/pdf"
+          className="hidden"
+          onChange={handlePdfUpload}
+        />
+      )}
+      {!readOnly && (
+        <input
+          id="tp-file-upload"
+          type="file"
+          className="hidden"
+          onChange={handleFileUpload}
         />
       )}
       <EditorContent editor={editor} />

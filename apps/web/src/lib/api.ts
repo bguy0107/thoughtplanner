@@ -58,6 +58,17 @@ export type Page = PageSummary & {
   files: FileRecord[]
 }
 
+export type EmbedMetadata = {
+  url: string
+  embedType: 'video' | 'link'
+  title: string | null
+  description: string | null
+  image: string | null
+  siteName: string | null
+  embedUrl: string | null
+  provider: string | null
+}
+
 export type FileRecord = {
   id: string
   pageId: string
@@ -220,6 +231,13 @@ export const api = {
       return res.json()
     },
     delete: (id: string) => request<void>(`/api/files/${id}`, { method: 'DELETE' }),
+  },
+  embeds: {
+    resolve: (pageId: string, url: string) =>
+      request<EmbedMetadata>(`/api/pages/${pageId}/embed-metadata`, {
+        method: 'POST',
+        body: JSON.stringify({ url }),
+      }),
   },
   search: (q: string, workspaceId: string) =>
     request<SearchResult[]>(`/api/search?q=${encodeURIComponent(q)}&workspaceId=${workspaceId}`),

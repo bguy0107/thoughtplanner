@@ -7,6 +7,7 @@ import fastifyWebSocket from '@fastify/websocket'
 import { authRoutes } from './routes/auth.js'
 import { pageRoutes } from './routes/pages.js'
 import { fileRoutes } from './routes/files.js'
+import { embedRoutes } from './routes/embeds.js'
 import { databaseRoutes } from './routes/databases.js'
 import { searchRoutes } from './routes/search.js'
 import { publicRoutes } from './routes/public.js'
@@ -50,6 +51,7 @@ await app.register(fastifyWebSocket)
 await app.register(authRoutes)
 await app.register(pageRoutes)
 await app.register(fileRoutes)
+await app.register(embedRoutes)
 await app.register(databaseRoutes)
 await app.register(searchRoutes)
 await app.register(publicRoutes)
