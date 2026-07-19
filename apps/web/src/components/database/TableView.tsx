@@ -18,6 +18,7 @@ import {
   useSortable,
 } from '@dnd-kit/sortable'
 import { CSS } from '@dnd-kit/utilities'
+import { positionBetween } from '@/lib/position'
 import { cn } from '@/lib/utils'
 import { api, type Column, type ColumnType, type DbRow, type DbSchema, type RelatedRow } from '@/lib/api'
 
@@ -52,6 +53,14 @@ function getProp(row: DbRow, colId: string): unknown {
   return (row.properties as Record<string, unknown>)[colId] ?? null
 }
 
+// A property's stored value can be stale relative to its column's current
+// type (e.g. the column was text when the value was written, then changed to
+// multi_select) — never assume it's already an array.
+function getMultiSelectValue(row: DbRow, colId: string): string[] {
+  const v = getProp(row, colId)
+  return Array.isArray(v) ? (v as string[]) : []
+}
+
 function displayValue(row: DbRow, col: Column): string {
   const v = getProp(row, col.id)
   if (v == null) return ''
@@ -78,10 +87,10 @@ interface Props {
   onDeleteRow: (rowId: string) => void
   onAddRow: (props?: Record<string, unknown>) => void
   onUpdateSchema: (columns: Column[]) => void
-  onReorderRows: (orderedIds: string[]) => void
+  onReorderRow: (rowId: string, position: number) => void
 }
 
-export function TableView({ schema, onUpdateRow, onDeleteRow, onAddRow, onUpdateSchema, onReorderRows }: Props) {
+export function TableView({ schema, onUpdateRow, onDeleteRow, onAddRow, onUpdateSchema, onReorderRow }: Props) {
   const [editing, setEditing] = useState<EditCell>(null)
   const [selectOpen, setSelectOpen] = useState<EditCell>(null)
   const [relationOpen, setRelationOpen] = useState<EditCell>(null)
@@ -221,7 +230,12 @@ export function TableView({ schema, onUpdateRow, onDeleteRow, onAddRow, onUpdate
     const oldIndex = sorted.findIndex((r) => r.id === active.id)
     const newIndex = sorted.findIndex((r) => r.id === over.id)
     if (oldIndex === -1 || newIndex === -1) return
-    onReorderRows(arrayMove(sorted, oldIndex, newIndex).map((r) => r.id))
+    // Only the dragged row's position needs to change — a fractional value
+    // between its new neighbors keeps every other row untouched.
+    const reordered = arrayMove(sorted, oldIndex, newIndex)
+    const movedIndex = reordered.findIndex((r) => r.id === active.id)
+    const position = positionBetween(reordered[movedIndex - 1]?.position, reordered[movedIndex + 1]?.position)
+    onReorderRow(active.id as string, position)
   }
 
   return (
@@ -538,17 +552,17 @@ function SortableRow({
           ) : col.type === 'multi_select' ? (
             <div className="relative">
               <div className="flex flex-wrap gap-1 min-h-[20px]">
-                {((getProp(row, col.id) as string[] | null) ?? []).map((opt) => (
+                {getMultiSelectValue(row, col.id).map((opt) => (
                   <span key={opt} className={`px-2 py-0.5 rounded text-xs font-medium ${chipColor(col.options ?? [], opt)}`}>{opt}</span>
                 ))}
-                {!((getProp(row, col.id) as string[] | null) ?? []).length && (
+                {!getMultiSelectValue(row, col.id).length && (
                   <span className="text-gray-300 dark:text-gray-600 text-xs">—</span>
                 )}
               </div>
               {selectOpen?.rowId === row.id && selectOpen?.colId === col.id && (
                 <OptionDropdown
                   options={col.options ?? []}
-                  selected={(getProp(row, col.id) as string[] | null) ?? []}
+                  selected={getMultiSelectValue(row, col.id)}
                   isMulti={true}
                   onToggle={(v) => onToggleMulti(row, col.id, v)}
                   onClear={() => onClearMulti(row, col.id)}

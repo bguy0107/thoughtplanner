@@ -143,11 +143,9 @@ export async function importRoutes(app: FastifyInstance) {
     const mdFiles = entries.filter((e) => e.entryName.endsWith('.md') && !e.isDirectory)
     const csvFiles = entries.filter((e) => e.entryName.endsWith('.csv') && !e.isDirectory)
 
-    let pagesCreated = 0
-    let databasesCreated = 0
     const errors: string[] = []
 
-    // Map from base name (without extension) to created page ID
+    // Map from base name (without extension) to the page ID generated for it below.
     const pageIdByName = new Map<string, string>()
 
     // Starting position for top-level pages, computed once rather than per file.
@@ -159,7 +157,11 @@ export async function importRoutes(app: FastifyInstance) {
     })
     let nextPosition = firstSibling[0] ? firstSibling[0].position + 1 : 0
 
-    // Process markdown pages first
+    // Build every page's data in memory first (ids generated client-side so
+    // the CSV pass below can resolve pageIdByName without a round trip per
+    // file), then insert them all in one batch instead of one create() per file.
+    const pagesToInsert: Prisma.PageCreateManyInput[] = []
+
     for (const entry of mdFiles) {
       try {
         const rawName = entry.entryName.split('/').pop()!
@@ -183,28 +185,33 @@ export async function importRoutes(app: FastifyInstance) {
           return csvBase === baseName
         })
 
-        const position = nextPosition++
-
-        const page = await prisma.page.create({
-          data: {
-            workspaceId,
-            title,
-            content: body ? (markdownToTiptap(body) as Prisma.InputJsonValue) : Prisma.JsonNull,
-            isDatabase: hasMatchingCsv,
-            position,
-            createdById: session.user.id,
-            updatedById: session.user.id,
-          },
+        const id = randomUUID()
+        pageIdByName.set(baseName, id)
+        pagesToInsert.push({
+          id,
+          workspaceId,
+          title,
+          content: body ? (markdownToTiptap(body) as Prisma.InputJsonValue) : Prisma.JsonNull,
+          isDatabase: hasMatchingCsv,
+          position: nextPosition++,
+          createdById: session.user.id,
+          updatedById: session.user.id,
         })
-
-        pageIdByName.set(baseName, page.id)
-        pagesCreated++
       } catch (e) {
         errors.push(`Page "${entry.entryName}": ${String(e)}`)
       }
     }
 
-    // Process CSV files as database content
+    if (pagesToInsert.length > 0) {
+      await prisma.page.createMany({ data: pagesToInsert })
+    }
+
+    // Process CSV files as database content — build every schema + row in
+    // memory too, then insert each in one batch across all files.
+    const schemasToInsert: Prisma.DatabaseSchemaCreateManyInput[] = []
+    const rowsToInsert: Prisma.DatabaseRowCreateManyInput[] = []
+    let databasesCreated = 0
+
     for (const entry of csvFiles) {
       try {
         const rawName = entry.entryName.split('/').pop()!
@@ -228,18 +235,16 @@ export async function importRoutes(app: FastifyInstance) {
           type: inferType(colValues[h]),
         }))
 
-        const schema = await prisma.databaseSchema.create({
-          data: { pageId, columns },
-        })
+        const schemaId = randomUUID()
+        schemasToInsert.push({ id: schemaId, pageId, columns })
 
-        const rowsToInsert = parsed.data.map((rowData) => {
+        for (const rowData of parsed.data) {
           const properties: Record<string, unknown> = {}
           for (const col of columns) {
             properties[col.id] = castValue(rowData[col.name] ?? '', col.type)
           }
-          return { pageId, schemaId: schema.id, properties: properties as Prisma.InputJsonValue }
-        })
-        await prisma.databaseRow.createMany({ data: rowsToInsert })
+          rowsToInsert.push({ pageId, schemaId, properties: properties as Prisma.InputJsonValue })
+        }
 
         databasesCreated++
       } catch (e) {
@@ -247,7 +252,14 @@ export async function importRoutes(app: FastifyInstance) {
       }
     }
 
-    return { pagesCreated, databasesCreated, errors }
+    if (schemasToInsert.length > 0) {
+      await prisma.databaseSchema.createMany({ data: schemasToInsert })
+    }
+    if (rowsToInsert.length > 0) {
+      await prisma.databaseRow.createMany({ data: rowsToInsert })
+    }
+
+    return { pagesCreated: pagesToInsert.length, databasesCreated, errors }
   })
 
   // POST /api/import/spreadsheet — accepts a multipart .xlsx/.xls/.csv upload.

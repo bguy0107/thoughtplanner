@@ -12,15 +12,16 @@ async function getSession(req: FastifyRequest) {
 }
 
 function withUrl(file: DbFile) {
-  return { ...file, url: fileUrl(file.storageKey) }
+  return { ...file, url: fileUrl(file.id) }
 }
 
-// The MinIO bucket serves objects with public read access so uploaded images
-// can be embedded directly in pages. Any type capable of executing script in
-// a browser (html, svg, xml, js, ...) must never be served with a matching
-// Content-Type + inline disposition, or a stored file becomes stored XSS on
-// the app's own origin. Only a small allowlist of genuinely inert types is
-// served inline; everything else is forced to download as an opaque blob.
+// Files are proxied through /api/files/:id/content (see below) rather than
+// served directly from MinIO, so page/workspace permission is enforced on
+// every fetch. Any type capable of executing script in a browser (html, svg,
+// xml, js, ...) must never be served with a matching Content-Type + inline
+// disposition, or a stored file becomes stored XSS on the app's own origin.
+// Only a small allowlist of genuinely inert types is served inline; everything
+// else is forced to download as an opaque blob.
 const INLINE_SAFE_TYPES = new Set([
   'image/png',
   'image/jpeg',
@@ -108,6 +109,29 @@ export async function fileRoutes(app: FastifyInstance) {
       return files.map(withUrl)
     },
   )
+
+  // GET /api/files/:id/content — stream the actual object, gated on page access
+  // (or the page being public) since the MinIO bucket itself is private.
+  app.get<{ Params: { id: string } }>('/api/files/:id/content', async (req, reply) => {
+    const file = await prisma.file.findUnique({
+      where: { id: req.params.id },
+      include: { page: { select: { isPublic: true, isArchived: true } } },
+    })
+    if (!file || file.page.isArchived) return reply.status(404).send({ error: 'Not found' })
+
+    if (!file.page.isPublic) {
+      const session = await getSession(req)
+      if (!session) return reply.status(401).send({ error: 'Unauthorized' })
+      const access = await requirePageAccess(session.user.id, file.pageId)
+      if (!access.ok) return reply.status(access.status).send({ error: access.error })
+    }
+
+    const stream = await minio.getObject(BUCKET, file.storageKey)
+    const headers = uploadMetadata(file.filename, file.mimeType)
+    reply.header('Content-Type', headers['Content-Type'])
+    reply.header('Content-Disposition', headers['Content-Disposition'])
+    return reply.send(stream)
+  })
 
   // DELETE /api/files/:id
   app.delete<{ Params: { id: string } }>('/api/files/:id', async (req, reply) => {

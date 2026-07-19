@@ -86,6 +86,7 @@ export async function v1Routes(app: FastifyInstance) {
       where,
       select: { id: true, parentPageId: true, title: true, icon: true, isDatabase: true, position: true, updatedAt: true },
       orderBy: { position: 'asc' },
+      take: 2000,
     })
 
     return pages
@@ -130,7 +131,7 @@ export async function v1Routes(app: FastifyInstance) {
 
     const schema = await prisma.databaseSchema.findUnique({
       where: { pageId: req.params.id },
-      include: { rows: { orderBy: { id: 'asc' } } },
+      include: { rows: { orderBy: { position: 'asc' } } },
     })
 
     if (!schema) return reply.status(404).send({ error: 'Not found' })

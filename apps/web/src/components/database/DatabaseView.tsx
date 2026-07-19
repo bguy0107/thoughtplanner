@@ -54,19 +54,19 @@ export function DatabaseView({ page, onTitleChange }: Props) {
     setSchema((s) => s ? { ...s, rows: s.rows.filter((r) => r.id !== rowId) } : s)
   }, [])
 
-  const handleReorderRows = useCallback(async (orderedIds: string[]) => {
+  const handleReorderRow = useCallback(async (rowId: string, position: number) => {
     setSchema((s) => {
       if (!s) return s
-      const rowMap = new Map(s.rows.map((r) => [r.id, r]))
-      const reordered = orderedIds
-        .map((id, i) => {
-          const row = rowMap.get(id)
-          return row ? { ...row, position: i } : null
-        })
-        .filter((r): r is (typeof s.rows)[number] => r != null)
-      return { ...s, rows: reordered }
+      const moved = s.rows.find((r) => r.id === rowId)
+      if (!moved) return s
+      const rest = s.rows.filter((r) => r.id !== rowId)
+      const insertAt = rest.findIndex((r) => r.position > position)
+      const updated = { ...moved, position }
+      const rows = [...rest]
+      rows.splice(insertAt === -1 ? rows.length : insertAt, 0, updated)
+      return { ...s, rows }
     })
-    await Promise.all(orderedIds.map((id, i) => api.databases.reorderRow(id, i)))
+    await api.databases.reorderRow(rowId, position)
   }, [])
 
   const views: { mode: ViewMode; label: string; icon: React.ReactNode }[] = [
@@ -147,7 +147,7 @@ export function DatabaseView({ page, onTitleChange }: Props) {
                 onDeleteRow={handleDeleteRow}
                 onAddRow={handleAddRow}
                 onUpdateSchema={handleUpdateSchema}
-                onReorderRows={handleReorderRows}
+                onReorderRow={handleReorderRow}
               />
             ) : view === 'board' ? (
               <BoardView
@@ -178,6 +178,7 @@ export function DatabaseView({ page, onTitleChange }: Props) {
           <SchemaBuilder
             schema={schema}
             onUpdate={handleUpdateSchema}
+            onUpdateRow={handleUpdateRow}
             onClose={() => setShowSchema(false)}
           />
         )}

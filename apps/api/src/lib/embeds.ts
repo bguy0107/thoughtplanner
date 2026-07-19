@@ -1,5 +1,6 @@
 import dns from 'node:dns/promises'
 import net from 'node:net'
+import { Agent } from 'undici'
 
 // Docker-network service names that must never be reachable through a
 // user-supplied embed URL, on top of the private-IP ranges checked below.
@@ -28,11 +29,19 @@ function isPrivateIp(ip: string): boolean {
   return true // unrecognized format — fail closed
 }
 
-async function assertPublicHost(hostname: string): Promise<void> {
+// Resolves + validates the hostname, then returns one of the validated
+// addresses to pin the actual connection to. Checking the hostname here and
+// then letting fetch() re-resolve it itself for the real connection would be
+// a TOCTOU: a malicious domain with a short DNS TTL could resolve to a public
+// IP for this check and a private one (e.g. cloud metadata) moments later for
+// the real request. Pinning closes that window.
+async function resolvePinnedAddress(hostname: string): Promise<{ address: string; family: 4 | 6 }> {
   if (BLOCKED_HOSTNAMES.has(hostname.toLowerCase())) throw new Error('That host is not allowed')
   const addresses = await dns.lookup(hostname, { all: true })
   if (addresses.length === 0) throw new Error('Could not resolve host')
   if (addresses.some(({ address }) => isPrivateIp(address))) throw new Error('That host is not allowed')
+  const [{ address, family }] = addresses
+  return { address, family: family === 6 ? 6 : 4 }
 }
 
 const MAX_BODY_BYTES = 2 * 1024 * 1024
@@ -45,13 +54,26 @@ async function safeFetch(
 ): Promise<{ finalUrl: string; body: string; contentType: string }> {
   const parsed = new URL(url)
   if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') throw new Error('Only http/https URLs are supported')
-  await assertPublicHost(parsed.hostname)
+  const pinned = await resolvePinnedAddress(parsed.hostname)
 
+  // Force the actual connection to the exact address we just validated,
+  // instead of letting undici do its own (separate, re-raceable) DNS lookup.
+  const dispatcher = new Agent({
+    connect: {
+      lookup: (_hostname, _options, callback) => callback(null, pinned.address, pinned.family),
+    },
+  })
+
+  // @types/node ships its own (slightly different) undici type definitions
+  // than the `undici` package we imported Agent from, so the two `Dispatcher`
+  // types don't structurally match even though they're compatible at runtime
+  // (both are the same undici under the hood) — hence the cast via `unknown`.
   const res = await fetch(parsed.toString(), {
     redirect: 'manual',
     signal: AbortSignal.timeout(FETCH_TIMEOUT_MS),
     headers: { 'User-Agent': USER_AGENT, Accept: 'text/html,application/json' },
-  })
+    dispatcher,
+  } as unknown as RequestInit)
 
   if ([301, 302, 303, 307, 308].includes(res.status)) {
     const location = res.headers.get('location')

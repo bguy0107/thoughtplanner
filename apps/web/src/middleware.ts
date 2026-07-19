@@ -1,6 +1,9 @@
 import { type NextRequest, NextResponse } from 'next/server'
 
-const PUBLIC_PATHS = ['/login', '/signup']
+// /share/* is the public page-viewing route (see app/share/[id]/page.tsx) —
+// it's meant to be reachable by logged-out visitors, so it must be exempt
+// from the session-cookie gate below like the auth pages are.
+const PUBLIC_PATHS = ['/login', '/signup', '/share']
 
 export function middleware(req: NextRequest) {
   const { pathname } = req.nextUrl

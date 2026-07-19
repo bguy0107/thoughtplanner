@@ -13,6 +13,11 @@ export function hashApiKey(raw: string): string {
   return createHash('sha256').update(raw).digest('hex')
 }
 
+// lastUsed only needs to be accurate to within this window — coalescing writes
+// to once per window avoids an UPDATE on every single API-key-authenticated
+// request, which would otherwise double the DB round trips on that path.
+const LAST_USED_UPDATE_INTERVAL_MS = 10 * 60 * 1000
+
 export async function getApiKeyUser(req: FastifyRequest) {
   const raw = req.headers['x-api-key']
   if (!raw || typeof raw !== 'string') return null
@@ -22,6 +27,13 @@ export async function getApiKeyUser(req: FastifyRequest) {
     include: { user: true },
   })
   if (!key) return null
-  await prisma.apiKey.update({ where: { id: key.id }, data: { lastUsed: new Date() } })
+
+  const isStale = !key.lastUsed || Date.now() - key.lastUsed.getTime() > LAST_USED_UPDATE_INTERVAL_MS
+  if (isStale) {
+    // Fire-and-forget: this bookkeeping write must not add latency to the
+    // request it's authenticating, and a lost update just delays the next one.
+    prisma.apiKey.update({ where: { id: key.id }, data: { lastUsed: new Date() } }).catch(() => {})
+  }
+
   return key.user
 }

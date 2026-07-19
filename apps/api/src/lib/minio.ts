@@ -14,25 +14,14 @@ export async function ensureBucket() {
   const exists = await minio.bucketExists(BUCKET)
   if (!exists) {
     await minio.makeBucket(BUCKET)
-    // Allow public read for file serving
-    await minio.setBucketPolicy(
-      BUCKET,
-      JSON.stringify({
-        Version: '2012-10-17',
-        Statement: [
-          {
-            Effect: 'Allow',
-            Principal: { AWS: ['*'] },
-            Action: ['s3:GetObject'],
-            Resource: [`arn:aws:s3:::${BUCKET}/*`],
-          },
-        ],
-      }),
-    )
   }
+  // Bucket stays private — object bytes are private page data and must only be
+  // reachable through the API's /api/files/:id/content route, which checks
+  // page/workspace permission (or public-page status) before streaming them.
+  // Do not set a public bucket policy here.
 }
 
-export function fileUrl(storageKey: string) {
-  const base = process.env.MINIO_PUBLIC_URL ?? 'http://localhost:9000'
-  return `${base}/${BUCKET}/${storageKey}`
+export function fileUrl(fileId: string) {
+  const base = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:3001'
+  return `${base}/api/files/${fileId}/content`
 }

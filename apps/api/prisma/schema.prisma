@@ -84,6 +84,15 @@ enum Role {
   VIEWER
 }
 
+// Singleton row (id is always 1) used to atomically claim "first user becomes
+// site admin" during signup — see the INSERT ... ON CONFLICT in lib/auth.ts.
+// A plain `count(User) === 0` check-then-act is racy under concurrent signups;
+// this table lets Postgres's own unique-index insert serialize the claim.
+model SystemState {
+  id                Int     @id @default(1)
+  firstAdminClaimed Boolean @default(false)
+}
+
 // ─── Workspaces ─────────────────────────────────────────────────────────────
 
 enum WorkspaceRole {

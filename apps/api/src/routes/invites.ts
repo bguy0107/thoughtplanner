@@ -33,6 +33,7 @@ export async function inviteRoutes(app: FastifyInstance) {
         usedBy: { select: { name: true } },
       },
       orderBy: { createdAt: 'desc' },
+      take: 1000,
     })
 
     return invites

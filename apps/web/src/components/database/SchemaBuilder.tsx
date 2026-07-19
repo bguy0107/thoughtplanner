@@ -33,10 +33,11 @@ const ROLLUP_OPS: RollupOperation[] = ['count', 'sum', 'avg', 'min', 'max']
 interface Props {
   schema: DbSchema
   onUpdate: (columns: Column[]) => void
+  onUpdateRow: (rowId: string, properties: Record<string, unknown>) => void
   onClose: () => void
 }
 
-export function SchemaBuilder({ schema, onUpdate, onClose }: Props) {
+export function SchemaBuilder({ schema, onUpdate, onUpdateRow, onClose }: Props) {
   const [expanded, setExpanded] = useState<string | null>(null)
   const [dbPages, setDbPages] = useState<PageSummary[]>([])
 
@@ -59,14 +60,47 @@ export function SchemaBuilder({ schema, onUpdate, onClose }: Props) {
     setExpanded(col.id)
   }
 
+  // Values entered under a column's previous type may not just be a
+  // different "flavor" of the same shape (a plain string isn't a valid
+  // multi_select value, which every view expects to be an array) — clear
+  // them rather than leaving stale, wrongly-shaped data sitting around that
+  // could crash a view or silently look consistent when it isn't.
+  function changeColumnType(col: Column, type: ColumnType) {
+    if (type === col.type) return
+    updateColumn(col.id, {
+      type,
+      options: undefined,
+      targetPageId: undefined,
+      relationColId: undefined,
+      targetColId: undefined,
+      operation: undefined,
+    })
+    for (const row of schema.rows) {
+      if (row.properties[col.id] === undefined) continue
+      const { [col.id]: _removed, ...rest } = row.properties
+      onUpdateRow(row.id, rest)
+    }
+  }
+
   function addOption(col: Column) {
     const name = prompt('Option name:')
     if (!name?.trim()) return
     updateColumn(col.id, { options: [...(col.options ?? []), name.trim()] })
   }
 
+  // Removing an option must also clear it from any row still holding that
+  // value — otherwise the stale value lingers invisibly (and reappears if an
+  // option with the same name is ever re-added).
   function removeOption(col: Column, opt: string) {
     updateColumn(col.id, { options: (col.options ?? []).filter((o) => o !== opt) })
+    for (const row of schema.rows) {
+      const val = row.properties[col.id]
+      if (col.type === 'select' && val === opt) {
+        onUpdateRow(row.id, { ...row.properties, [col.id]: null })
+      } else if (col.type === 'multi_select' && Array.isArray(val) && val.includes(opt)) {
+        onUpdateRow(row.id, { ...row.properties, [col.id]: (val as string[]).filter((v) => v !== opt) })
+      }
+    }
   }
 
   const relationCols = schema.columns.filter((c) => c.type === 'relation')
@@ -120,7 +154,7 @@ export function SchemaBuilder({ schema, onUpdate, onClose }: Props) {
                     {ALL_TYPES.map((t) => (
                       <button
                         key={t}
-                        onClick={() => updateColumn(col.id, { type: t })}
+                        onClick={() => changeColumnType(col, t)}
                         disabled={idx === 0 && t !== 'text'}
                         className={`flex items-center gap-1.5 px-2 py-1.5 rounded text-xs transition-colors ${
                           col.type === t

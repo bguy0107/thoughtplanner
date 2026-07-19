@@ -66,6 +66,7 @@ export async function pageRoutes(app: FastifyInstance) {
         updatedAt: true,
       },
       orderBy: { position: 'asc' },
+      take: 2000,
     })
 
     return pages
@@ -156,6 +157,10 @@ export async function pageRoutes(app: FastifyInstance) {
     if (!body.success) return reply.status(400).send({ error: body.error.flatten() })
 
     if (body.data.parentPageId) {
+      if (body.data.parentPageId === req.params.id) {
+        return reply.status(400).send({ error: 'A page cannot be its own parent' })
+      }
+
       const parent = await prisma.page.findUnique({
         where: { id: body.data.parentPageId },
         select: { workspaceId: true },
@@ -163,6 +168,22 @@ export async function pageRoutes(app: FastifyInstance) {
       if (!parent) return reply.status(404).send({ error: 'Parent page not found' })
       if (parent.workspaceId !== access.workspaceId) {
         return reply.status(400).send({ error: 'Cannot move a page to a different workspace' })
+      }
+
+      // Reject moving a page under one of its own descendants — that would
+      // create a cycle in the parent chain, sending the recursive-CTE archive
+      // query below (and any tree renderer walking parentPageId) into an
+      // infinite loop.
+      const cycle = await prisma.$queryRaw<Array<{ id: string }>>`
+        WITH RECURSIVE ancestors AS (
+          SELECT id, "parentPageId" FROM "Page" WHERE id = ${body.data.parentPageId}
+          UNION ALL
+          SELECT p.id, p."parentPageId" FROM "Page" p INNER JOIN ancestors a ON p.id = a."parentPageId"
+        )
+        SELECT id FROM ancestors WHERE id = ${req.params.id} LIMIT 1
+      `
+      if (cycle.length > 0) {
+        return reply.status(400).send({ error: 'Cannot move a page under one of its own descendants' })
       }
     }
 
@@ -186,6 +207,14 @@ export async function pageRoutes(app: FastifyInstance) {
         title: page.title,
         icon: page.icon,
       })
+    }
+
+    // The editor normally sends content over the WS route (see routes/ws.ts),
+    // which broadcasts to other viewers. This REST path is the fallback used
+    // when that socket is down — it must also broadcast, or a save made while
+    // disconnected silently overwrites the page with no one else notified.
+    if (content !== undefined) {
+      wsBroadcast(req.params.id, { type: 'page:content', pageId: req.params.id, content: page.content })
     }
 
     return page

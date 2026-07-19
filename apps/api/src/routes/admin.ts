@@ -30,6 +30,7 @@ export async function adminRoutes(app: FastifyInstance) {
         updatedBy: { select: { id: true, name: true } },
       },
       orderBy: { updatedAt: 'desc' },
+      take: 1000,
     })
 
     return pages
@@ -103,6 +104,7 @@ export async function adminRoutes(app: FastifyInstance) {
         _count: { select: { databaseRows: true } },
       },
       orderBy: { updatedAt: 'desc' },
+      take: 1000,
     })
 
     return pages.map((p) => ({

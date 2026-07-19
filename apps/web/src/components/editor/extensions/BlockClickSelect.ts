@@ -27,13 +27,22 @@ export const BlockClickSelect = Extension.create({
             const handleRect = handle.getBoundingClientRect()
             const node = nodeDOMAtPoint(handleRect.right + 10, handleRect.top + handleRect.height / 2)
             if (!node) return
-            const nodeRect = node.getBoundingClientRect()
-            const result = view.posAtCoords({ left: nodeRect.left + 1, top: nodeRect.top + 1 })
-            if (!result || result.inside < 0) return
 
-            let pos = result.inside
-            const $pos = view.state.doc.resolve(pos)
-            if ($pos.depth > 1) pos = $pos.before($pos.depth)
+            // Map the DOM node we just identified as "the block the handle
+            // points at" straight to its document position, rather than
+            // re-deriving a position from coordinates: for a nested block
+            // (e.g. a list item whose content lives in an inner <p>), a
+            // coordinate-based lookup here would land inside that inner
+            // paragraph instead of the list item itself, selecting/deleting
+            // the wrong node.
+            let pos: number
+            try {
+              const domPos = view.posAtDOM(node, 0)
+              const $pos = view.state.doc.resolve(domPos)
+              pos = $pos.before($pos.depth)
+            } catch {
+              return
+            }
 
             event.preventDefault()
             view.dispatch(view.state.tr.setSelection(NodeSelection.create(view.state.doc, pos)))

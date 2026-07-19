@@ -32,19 +32,30 @@ const UpdateRowBodySchema = z.object({
 async function computeRollups(
   columns: Col[],
   rows: Array<{ id: string; properties: unknown }>,
+  userId: string,
 ): Promise<Array<{ id: string; properties: unknown }>> {
   const rollupCols = columns.filter((c) => c.type === 'rollup' && c.relationColId && c.targetColId && c.operation)
   if (rollupCols.length === 0) return rows
 
-  // Gather every related row id referenced by any rollup column across all rows,
+  // A relation column's targetPageId is only trustworthy if the requesting user
+  // still has access to that page — otherwise a schema could point a relation at
+  // a page/workspace the viewer has no business reading rollup values from.
+  const targetPageIdByRelColId = new Map<string, string>()
+  for (const col of rollupCols) {
+    const relCol = columns.find((c) => c.id === col.relationColId && c.type === 'relation')
+    if (!relCol?.targetPageId) continue
+    if (targetPageIdByRelColId.has(relCol.id)) continue
+    const access = await requirePageAccess(userId, relCol.targetPageId)
+    if (access.ok) targetPageIdByRelColId.set(relCol.id, relCol.targetPageId)
+  }
+
+  // Gather every related row id referenced by an accessible relation column,
   // and resolve them in a single query instead of one per (row, column) pair.
   const allRelatedIds = new Set<string>()
   for (const row of rows) {
     const props = row.properties as Record<string, unknown>
-    for (const col of rollupCols) {
-      const relCol = columns.find((c) => c.id === col.relationColId && c.type === 'relation')
-      if (!relCol) continue
-      const relatedIds = props[relCol.id]
+    for (const relColId of targetPageIdByRelColId.keys()) {
+      const relatedIds = props[relColId]
       if (Array.isArray(relatedIds)) {
         for (const id of relatedIds as string[]) allRelatedIds.add(id)
       }
@@ -53,18 +64,22 @@ async function computeRollups(
 
   const relatedRows = allRelatedIds.size
     ? await prisma.databaseRow.findMany({
-        where: { id: { in: [...allRelatedIds] } },
-        select: { id: true, properties: true },
+        where: { id: { in: [...allRelatedIds] }, pageId: { in: [...new Set(targetPageIdByRelColId.values())] } },
+        select: { id: true, pageId: true, properties: true },
       })
     : []
-  const relatedById = new Map(relatedRows.map((r) => [r.id, r.properties as Record<string, unknown>]))
+  const relatedById = new Map(relatedRows.map((r) => [r.id, r]))
 
   return rows.map((row) => {
     const props = { ...(row.properties as Record<string, unknown>) }
 
     for (const col of rollupCols) {
       const relCol = columns.find((c) => c.id === col.relationColId && c.type === 'relation')
-      if (!relCol || !col.targetColId || !col.operation) continue
+      const targetPageId = relCol && targetPageIdByRelColId.get(relCol.id)
+      if (!relCol || !col.targetColId || !col.operation || !targetPageId) {
+        if (col.operation) props[col.id] = col.operation === 'count' ? 0 : null
+        continue
+      }
 
       const relatedIds = props[relCol.id]
       if (!Array.isArray(relatedIds) || relatedIds.length === 0) {
@@ -72,7 +87,13 @@ async function computeRollups(
         continue
       }
 
-      const matched = (relatedIds as string[]).map((id) => relatedById.get(id)).filter((p): p is Record<string, unknown> => p != null)
+      // Only honor related ids that actually resolve to a row on the relation's
+      // configured (and access-checked) target page — a row property is
+      // client-controlled and must not be trusted to point wherever it claims.
+      const matched = (relatedIds as string[])
+        .map((id) => relatedById.get(id))
+        .filter((r): r is NonNullable<typeof r> => r != null && r.pageId === targetPageId)
+        .map((r) => r.properties as Record<string, unknown>)
       const vals = matched.map((p) => p[col.targetColId!]).filter((v) => v != null)
 
       if (col.operation === 'count') {
@@ -108,7 +129,7 @@ export async function databaseRoutes(app: FastifyInstance) {
     if (!schema) return reply.status(404).send({ error: 'Not found' })
 
     const columns = schema.columns as Col[]
-    const rows = await computeRollups(columns, schema.rows)
+    const rows = await computeRollups(columns, schema.rows, session.user.id)
 
     return { ...schema, rows }
   })
@@ -155,6 +176,18 @@ export async function databaseRoutes(app: FastifyInstance) {
 
     const body = UpdateSchemaBodySchema.safeParse(req.body)
     if (!body.success) return reply.status(400).send({ error: body.error.flatten() })
+
+    // A relation column can only point at a page this editor can actually see —
+    // otherwise rollups built on top of it would leak data from elsewhere.
+    const targetPageIds = new Set(
+      body.data.columns.filter((c) => c.type === 'relation' && c.targetPageId).map((c) => c.targetPageId!),
+    )
+    for (const targetPageId of targetPageIds) {
+      const targetAccess = await requirePageAccess(session.user.id, targetPageId)
+      if (!targetAccess.ok) {
+        return reply.status(400).send({ error: `No access to relation target page ${targetPageId}` })
+      }
+    }
 
     const schema = await prisma.databaseSchema.update({
       where: { pageId: req.params.pageId },

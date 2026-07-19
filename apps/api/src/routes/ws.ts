@@ -2,7 +2,7 @@ import type { FastifyInstance, FastifyRequest } from 'fastify'
 import { prisma } from '../lib/prisma.js'
 import { auth } from '../lib/auth.js'
 import { wsJoin, wsLeave, wsBroadcast } from '../lib/wsHub.js'
-import { requirePageAccess, hasWorkspaceRole } from '../lib/workspace.js'
+import { requirePageAccess, getMembership, hasWorkspaceRole } from '../lib/workspace.js'
 
 async function getSession(req: FastifyRequest) {
   return auth.api.getSession({ headers: req.headers as unknown as Headers })
@@ -30,24 +30,38 @@ export async function wsRoutes(app: FastifyInstance) {
         socket.close(1008, 'Forbidden')
         return
       }
-      const canEdit = hasWorkspaceRole(access.membership.role, 'EDITOR')
+      const { workspaceId } = access
 
       wsJoin(pageId, socket)
 
-      socket.on('message', async (raw: Buffer) => {
-        try {
-          const msg = JSON.parse(raw.toString())
+      // Messages on a single socket are processed strictly in arrival order —
+      // each handler is chained onto the previous one's promise so that a DB
+      // write (and the broadcast that follows it) can never complete out of
+      // order relative to an earlier message from the same client.
+      let chain = Promise.resolve()
 
-          if (msg.type === 'page:content' && msg.pageId === pageId && canEdit) {
-            await prisma.page.update({
-              where: { id: pageId },
-              data: { content: msg.content, updatedById: session.user.id },
-            })
-            wsBroadcast(pageId, { type: 'page:content', pageId, content: msg.content }, socket)
+      socket.on('message', (raw: Buffer) => {
+        chain = chain.then(async () => {
+          try {
+            const msg = JSON.parse(raw.toString())
+
+            if (msg.type === 'page:content' && msg.pageId === pageId) {
+              // Re-check the role on every write instead of once at connect
+              // time, so a mid-session role downgrade (e.g. EDITOR -> VIEWER)
+              // takes effect immediately rather than only on next reconnect.
+              const membership = await getMembership(session.user.id, workspaceId)
+              if (!membership || !hasWorkspaceRole(membership.role, 'EDITOR')) return
+
+              await prisma.page.update({
+                where: { id: pageId },
+                data: { content: msg.content, updatedById: session.user.id },
+              })
+              wsBroadcast(pageId, { type: 'page:content', pageId, content: msg.content }, socket)
+            }
+          } catch {
+            // ignore malformed messages
           }
-        } catch {
-          // ignore malformed messages
-        }
+        })
       })
 
       socket.on('close', () => wsLeave(pageId, socket))

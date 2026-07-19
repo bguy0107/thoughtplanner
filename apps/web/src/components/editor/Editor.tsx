@@ -52,14 +52,21 @@ export const Editor = forwardRef<EditorHandle, EditorProps>(function Editor(
   ref,
 ) {
   const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const dirtyRef = useRef(false)
   const { addDatabase } = useSidebarStore()
 
   const debouncedSave = useCallback(
     (content: unknown) => {
+      dirtyRef.current = true
       if (saveTimer.current) clearTimeout(saveTimer.current)
       saveTimer.current = setTimeout(() => {
-        onChange(content)
-        sendContent(content)
+        // Prefer the WS path — it's the one the server broadcasts to other
+        // clients from. Only fall back to the REST write (which also
+        // broadcasts, see pages.ts) when the socket isn't up, instead of
+        // doing both on every keystroke.
+        const sentOverWs = sendContent(content)
+        if (!sentOverWs) onChange(content)
+        dirtyRef.current = false
       }, 800)
     },
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -182,7 +189,7 @@ export const Editor = forwardRef<EditorHandle, EditorProps>(function Editor(
     },
   })
 
-  const { sendContent } = usePageSync(pageId, editor, onRemoteMeta)
+  const { sendContent } = usePageSync(pageId, editor, onRemoteMeta, () => dirtyRef.current)
 
   useImperativeHandle(ref, () => ({
     getMarkdown: () => editor?.storage.markdown.getMarkdown() ?? '',

@@ -15,6 +15,7 @@ import {
 } from '@dnd-kit/sortable'
 import { useSidebarStore } from '@/store/sidebar'
 import { api } from '@/lib/api'
+import { positionBetween } from '@/lib/position'
 import { PageItem } from './PageItem'
 import type { PageSummary } from '@/lib/api'
 
@@ -41,29 +42,25 @@ export function PageTree({ parentId, depth, tree }: PageTreeProps) {
     const newIndex = children.findIndex((p) => p.id === over.id)
     if (oldIndex === -1 || newIndex === -1) return
 
-    const reordered = arrayMove(children, oldIndex, newIndex)
+    // Only the dragged page's position needs to change — a fractional value
+    // between its new neighbors keeps every other sibling's position (and
+    // therefore its stored row) untouched.
+    const reorderedSiblings = arrayMove(children, oldIndex, newIndex)
+    const movedIndex = reorderedSiblings.findIndex((p) => p.id === active.id)
+    const position = positionBetween(
+      reorderedSiblings[movedIndex - 1]?.position,
+      reorderedSiblings[movedIndex + 1]?.position,
+    )
 
-    // Assign new integer positions
-    const updates: Array<{ id: string; position: number }> = reordered.map((p, i) => ({
-      id: p.id,
-      position: i,
-    }))
-
-    // Optimistically update local state
-    const updatedPages: PageSummary[] = pages.map((p) => {
-      const u = updates.find((u) => u.id === p.id)
-      return u ? { ...p, position: u.position } : p
-    })
+    // Optimistically move the dragged page within the flat list.
+    const oldFlatIndex = pages.findIndex((p) => p.id === active.id)
+    const newFlatIndex = pages.findIndex((p) => p.id === over.id)
+    const updatedPages: PageSummary[] = arrayMove(pages, oldFlatIndex, newFlatIndex).map((p) =>
+      p.id === active.id ? { ...p, position } : p,
+    )
     setPages(updatedPages)
 
-    // Persist each changed position
-    await Promise.all(
-      updates.map((u, i) =>
-        reordered[i].position !== children[i]?.position
-          ? api.pages.update(u.id, { position: u.position })
-          : Promise.resolve(),
-      ),
-    )
+    await api.pages.update(active.id as string, { position })
   }
 
   if (children.length === 0 && depth === 0) {

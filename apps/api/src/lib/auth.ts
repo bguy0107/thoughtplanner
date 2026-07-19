@@ -3,6 +3,13 @@ import { admin } from 'better-auth/plugins'
 import { prismaAdapter } from 'better-auth/adapters/prisma'
 import { prisma } from './prisma.js'
 
+// better-auth's create hooks don't share context between `before` and `after`
+// for the same signup request, so this in-memory map bridges "which invite (if
+// any) actually granted this role" from before() to after() — see the create
+// hook below. Requests for the same email can't race each other in a way that
+// matters here since email uniqueness on User already serializes them.
+const pendingInviteClaims = new Map<string, string>()
+
 export const auth = betterAuth({
   database: prismaAdapter(prisma, {
     provider: 'postgresql',
@@ -42,9 +49,20 @@ export const auth = betterAuth({
         // to ADMIN. A pending invite (matched by email) bypasses ALLOW_SIGNUP and
         // sets the role the admin picked when generating the invite link.
         async before(user) {
-          const existingUsers = await prisma.user.count()
+          // Atomic claim: a plain `count(User) === 0` check-then-act would let
+          // two concurrent signups on a fresh instance both see "no users yet"
+          // and both become ADMIN. This single INSERT ... ON CONFLICT is
+          // serialized by Postgres's own unique-index insert handling, so only
+          // one request can ever win the claim.
+          const claim = await prisma.$queryRaw<Array<{ claimed: boolean }>>`
+            INSERT INTO "SystemState" (id, "firstAdminClaimed")
+            VALUES (1, true)
+            ON CONFLICT (id) DO UPDATE SET "firstAdminClaimed" = true
+            WHERE "SystemState"."firstAdminClaimed" = false
+            RETURNING true AS claimed
+          `
 
-          if (existingUsers === 0) {
+          if (claim.length > 0) {
             return { data: { ...user, role: 'ADMIN' } }
           }
 
@@ -53,6 +71,7 @@ export const auth = betterAuth({
           })
 
           if (invite) {
+            pendingInviteClaims.set(user.email, invite.id)
             return { data: { ...user, role: invite.role } }
           }
 
@@ -67,9 +86,16 @@ export const auth = betterAuth({
         // Marks the invite consumed now that the user record actually exists —
         // creation could still fail after `before` (e.g. duplicate email), so
         // this must not happen until we know the account was really created.
+        // Only consumes the invite that actually granted this role (tracked
+        // via pendingInviteClaims) — a signup that got in through the
+        // first-admin or open-signup path must not silently burn an unrelated
+        // pending invite for the same email.
         async after(user) {
+          const inviteId = pendingInviteClaims.get(user.email)
+          if (!inviteId) return
+          pendingInviteClaims.delete(user.email)
           await prisma.invite.updateMany({
-            where: { email: user.email, usedAt: null },
+            where: { id: inviteId, usedAt: null },
             data: { usedAt: new Date(), usedById: user.id },
           })
         },

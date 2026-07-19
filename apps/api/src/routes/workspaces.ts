@@ -179,22 +179,37 @@ export async function workspaceRoutes(app: FastifyInstance) {
         return reply.status(404).send({ error: 'Not found' })
       }
 
-      if (target.role === 'ADMIN' && body.data.role !== 'ADMIN') {
-        const adminCount = await prisma.workspaceMember.count({
-          where: { workspaceId: req.params.id, role: 'ADMIN' },
+      try {
+        const member = await prisma.$transaction(async (tx) => {
+          if (target.role === 'ADMIN' && body.data.role !== 'ADMIN') {
+            // SELECT ... FOR UPDATE locks every currently-admin row for this
+            // workspace. Under concurrent requests demoting two different
+            // admins, the second transaction blocks here until the first
+            // commits, then re-evaluates against the now-current data — so
+            // it correctly sees the reduced admin count instead of the stale
+            // pre-demotion count a plain `count()` would race on.
+            const admins = await tx.$queryRaw<Array<{ id: string }>>`
+              SELECT id FROM "WorkspaceMember" WHERE "workspaceId" = ${req.params.id} AND role = 'ADMIN' FOR UPDATE
+            `
+            if (admins.length <= 1) {
+              throw new Error('LAST_ADMIN')
+            }
+          }
+
+          return tx.workspaceMember.update({
+            where: { id: req.params.memberId },
+            data: { role: body.data.role },
+            select: memberSelect,
+          })
         })
-        if (adminCount <= 1) {
+
+        return member
+      } catch (err) {
+        if (err instanceof Error && err.message === 'LAST_ADMIN') {
           return reply.status(409).send({ error: 'Workspace must have at least one admin' })
         }
+        throw err
       }
-
-      const member = await prisma.workspaceMember.update({
-        where: { id: req.params.memberId },
-        data: { role: body.data.role },
-        select: memberSelect,
-      })
-
-      return member
     },
   )
 
@@ -216,17 +231,30 @@ export async function workspaceRoutes(app: FastifyInstance) {
         if (!access.ok) return reply.status(access.status).send({ error: access.error })
       }
 
-      if (target.role === 'ADMIN') {
-        const adminCount = await prisma.workspaceMember.count({
-          where: { workspaceId: req.params.id, role: 'ADMIN' },
+      try {
+        await prisma.$transaction(async (tx) => {
+          if (target.role === 'ADMIN') {
+            // See the matching comment in the PATCH role-change route above —
+            // this lock prevents two concurrent removals from both reading a
+            // stale admin count and jointly zeroing out the workspace's admins.
+            const admins = await tx.$queryRaw<Array<{ id: string }>>`
+              SELECT id FROM "WorkspaceMember" WHERE "workspaceId" = ${req.params.id} AND role = 'ADMIN' FOR UPDATE
+            `
+            if (admins.length <= 1) {
+              throw new Error('LAST_ADMIN')
+            }
+          }
+
+          await tx.workspaceMember.delete({ where: { id: req.params.memberId } })
         })
-        if (adminCount <= 1) {
+
+        return reply.status(204).send()
+      } catch (err) {
+        if (err instanceof Error && err.message === 'LAST_ADMIN') {
           return reply.status(409).send({ error: 'Workspace must have at least one admin' })
         }
+        throw err
       }
-
-      await prisma.workspaceMember.delete({ where: { id: req.params.memberId } })
-      return reply.status(204).send()
     },
   )
 }
