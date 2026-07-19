@@ -37,6 +37,9 @@ export interface EditorHandle {
 
 interface EditorProps {
   pageId: string
+  // Only needed to create a nested database via the `/database` slash command,
+  // which is unavailable in readOnly mode (the public share view) — optional there.
+  workspaceId?: string
   initialContent: unknown
   onChange: (content: unknown) => void
   onNavigate?: (url: string) => void
@@ -45,7 +48,7 @@ interface EditorProps {
 }
 
 export const Editor = forwardRef<EditorHandle, EditorProps>(function Editor(
-  { pageId, initialContent, onChange, onNavigate, onRemoteMeta, readOnly = false },
+  { pageId, workspaceId, initialContent, onChange, onNavigate, onRemoteMeta, readOnly = false },
   ref,
 ) {
   const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
@@ -106,7 +109,8 @@ export const Editor = forwardRef<EditorHandle, EditorProps>(function Editor(
                 description: 'Create a new database page',
                 icon: '⊞',
                 command: () => {
-                  addDatabase(pageId).then((db) => onNavigate?.(`/page/${db.id}`))
+                  if (!workspaceId) return
+                  addDatabase(workspaceId, pageId).then((db) => onNavigate?.(`/page/${db.id}`))
                 },
               },
             ]

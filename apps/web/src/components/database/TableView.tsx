@@ -96,6 +96,12 @@ export function TableView({ schema, onUpdateRow, onDeleteRow, onAddRow, onUpdate
     useSensor(PointerSensor, { activationConstraint: { distance: 6 } }),
   )
 
+  // DndContext's screen-reader announcer renders a <div>, which isn't valid
+  // HTML directly inside <tr>/<thead>/<tbody> — portal it out to <body>.
+  // Accessibility itself defers rendering until after mount, so this is
+  // safe to resolve eagerly without a hydration mismatch.
+  const a11yContainer = typeof document !== 'undefined' ? document.body : undefined
+
   useEffect(() => {
     if (editing) inputRef.current?.focus()
   }, [editing])
@@ -275,7 +281,12 @@ export function TableView({ schema, onUpdateRow, onDeleteRow, onAddRow, onUpdate
             <thead>
               <tr className={`${lockHeaders ? 'sticky top-0 z-20' : ''} bg-[#f7f7f5] dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700`}>
                 <th className="w-6 px-1 py-2" />
-                <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleColumnDragEnd}>
+                <DndContext
+                  sensors={sensors}
+                  collisionDetection={closestCenter}
+                  onDragEnd={handleColumnDragEnd}
+                  accessibility={{ container: a11yContainer }}
+                >
                   <SortableContext items={visibleColumns.map((c) => c.id)} strategy={horizontalListSortingStrategy}>
                     {visibleColumns.map((col, i) => (
                       <SortableColumnHeader
@@ -302,7 +313,12 @@ export function TableView({ schema, onUpdateRow, onDeleteRow, onAddRow, onUpdate
                 <th className="w-8" />
               </tr>
             </thead>
-            <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleRowDragEnd}>
+            <DndContext
+              sensors={sensors}
+              collisionDetection={closestCenter}
+              onDragEnd={handleRowDragEnd}
+              accessibility={{ container: a11yContainer }}
+            >
               <SortableContext items={sorted.map((r) => r.id)} strategy={verticalListSortingStrategy}>
                 <tbody>
                   {sorted.map((row) => (

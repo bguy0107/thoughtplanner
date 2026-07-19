@@ -14,6 +14,7 @@ export default function PageView({ params }: { params: Promise<{ id: string }> }
   const router = useRouter()
   const [page, setPage] = useState<Page | null>(null)
   const [loading, setLoading] = useState(true)
+  const [loadError, setLoadError] = useState<string | null>(null)
   const [copied, setCopied] = useState(false)
   const coverInputRef = useRef<HTMLInputElement>(null)
   const markdownImportRef = useRef<HTMLInputElement>(null)
@@ -22,10 +23,11 @@ export default function PageView({ params }: { params: Promise<{ id: string }> }
 
   useEffect(() => {
     setLoading(true)
-    api.pages.get(id).then((p) => {
-      setPage(p)
-      setLoading(false)
-    })
+    setLoadError(null)
+    api.pages.get(id)
+      .then((p) => setPage(p))
+      .catch((e) => setLoadError(e instanceof Error ? e.message : 'Failed to load page'))
+      .finally(() => setLoading(false))
   }, [id])
 
   const handleTitleChange = useCallback(
@@ -123,6 +125,10 @@ export default function PageView({ params }: { params: Promise<{ id: string }> }
         <div className="w-5 h-5 border-2 border-gray-300 dark:border-gray-600 border-t-gray-600 dark:border-t-gray-300 rounded-full animate-spin" />
       </div>
     )
+  }
+
+  if (loadError) {
+    return <div className="flex items-center justify-center h-full text-gray-400 dark:text-gray-500">{loadError}</div>
   }
 
   if (!page) {
@@ -227,6 +233,7 @@ export default function PageView({ params }: { params: Promise<{ id: string }> }
           ref={editorRef}
           key={`editor-${page.id}`}
           pageId={page.id}
+          workspaceId={page.workspaceId}
           initialContent={page.content}
           onChange={handleContentChange}
           onNavigate={router.push}
