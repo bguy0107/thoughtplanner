@@ -3,14 +3,14 @@
 # Caddy only requests a Let's Encrypt certificate for a real domain-name site
 # address; port-only addresses (":3000") are served as plain HTTP and never
 # get TLS. Each block below binds {$DOMAIN} on a distinct port so Caddy issues
-# (and reuses) one cert for the domain across all three, via the HTTP-01
-# challenge on port 80 — make sure DNS for DOMAIN points at this host and port
-# 80/443 are reachable from the internet.
+# (and reuses) one cert for the domain across both, via the HTTP-01 challenge
+# on port 80 — make sure DNS for DOMAIN points at this host and port 80/443
+# are reachable from the internet.
 #
 # Set DOMAIN in your .env to your real domain (not "localhost") before using
 # this file, and update NEXT_PUBLIC_API_URL / NEXT_PUBLIC_APP_URL /
-# MINIO_PUBLIC_URL / CORS_ORIGIN / BETTER_AUTH_URL to the matching
-# https://{$DOMAIN}:<port> values.
+# CORS_ORIGIN / BETTER_AUTH_URL to the matching https://{$DOMAIN}:<port>
+# values.
 
 {$DOMAIN} {
   reverse_proxy web:3000
@@ -20,11 +20,13 @@
   reverse_proxy api:3001
 }
 
+# The MinIO bucket is private — uploaded files are read through the API's
+# /api/files/:id/content proxy (which enforces page/workspace permission),
+# not served directly here. This block is not required for the app to work;
+# it's only useful if you want authenticated direct S3 API access to the
+# bucket from outside tooling (e.g. `mc`/`rclone`). Requires port 9000 open
+# on the firewall and MinIO credentials — see MINIO_ACCESS_KEY/SECRET_KEY.
 {$DOMAIN}:9000 {
-  # Uploaded files are served from here with public read access. Deny MIME
-  # sniffing so a browser can never reinterpret a stored file (whose
-  # Content-Type is already restricted by the API's upload allowlist) as
-  # HTML/SVG and execute script from this origin.
   header X-Content-Type-Options "nosniff"
   reverse_proxy minio:9000
 }

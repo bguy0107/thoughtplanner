@@ -20,7 +20,7 @@ Compose command on your home network or a VPS.
 - Link embeds — SSRF-guarded Open Graph preview cards, with inline YouTube/Vimeo video embeds for recognized video links; plus an inline PDF viewer and downloadable file attachments
 - Page icons (emoji picker) and full-width cover images
 - Markdown import/export per page
-- File & image uploads, stored in MinIO — including paste-to-upload images directly into the editor
+- File & image uploads, stored in a private MinIO bucket and streamed back through a permission-gated API proxy — including paste-to-upload images directly into the editor
 - Full-text title search with a Ctrl+K command palette
 - Public read-only page sharing via shareable link
 - Soft-delete (archive) with admin restore/purge
@@ -52,7 +52,7 @@ Compose command on your home network or a VPS.
 ### Infrastructure
 - One `docker-compose.yml` for local/LAN use, `docker-compose.prod.yml` overlay for VPS deployment
 - Caddy reverse proxy — plain HTTP locally, automatic HTTPS (Let's Encrypt) on a real domain
-- Postgres for relational data, Redis for caching/pub-sub, MinIO for S3-compatible object storage
+- Postgres for relational data, Redis for caching/pub-sub, MinIO for S3-compatible object storage (bucket is private; the API proxies file reads and enforces page/workspace permission on every request)
 
 ---
 
@@ -104,7 +104,6 @@ at `http://<host-machine-LAN-IP>:3000`. To make that work:
    ```
    NEXT_PUBLIC_API_URL=http://<LAN-IP>:3001
    NEXT_PUBLIC_APP_URL=http://<LAN-IP>:3000
-   MINIO_PUBLIC_URL=http://<LAN-IP>:9000
    CORS_ORIGIN=http://<LAN-IP>:3000
    BETTER_AUTH_URL=http://<LAN-IP>:3001
    ```
@@ -123,9 +122,12 @@ the internet.
 ## Deploying to a VPS (with HTTPS)
 
 1. Point a DNS **A record** for your domain at the VPS's public IP.
-2. Open inbound ports `80`, `443`, `3001`, and `9000` on the VPS firewall (Caddy
-   issues one Let's Encrypt certificate for the domain and reuses it across
-   ports 3001/9000 for the API and file storage).
+2. Open inbound ports `80`, `443`, and `3001` on the VPS firewall (Caddy issues
+   one Let's Encrypt certificate for the domain and reuses it across port 3001
+   for the API). Port `9000` (MinIO) doesn't need to be open — file storage is
+   private and only reachable through the API proxy; leave it closed unless
+   you specifically want direct S3 API access to the bucket for outside
+   tooling (e.g. `mc`/`rclone` backups).
 3. Clone the repo and configure `.env`:
 
    ```bash
@@ -142,7 +144,6 @@ the internet.
    DOMAIN=yourdomain.com
 
    BETTER_AUTH_URL=https://yourdomain.com:3001
-   MINIO_PUBLIC_URL=https://yourdomain.com:9000
    CORS_ORIGIN=https://yourdomain.com
    NEXT_PUBLIC_API_URL=https://yourdomain.com:3001
    NEXT_PUBLIC_APP_URL=https://yourdomain.com

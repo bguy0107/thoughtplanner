@@ -3,8 +3,8 @@
 # Before running:
 #   - Set DOMAIN in your .env to your real domain (not "localhost") — this
 #     enables actual auto-HTTPS via Let's Encrypt (see Caddyfile.prod).
-#   - Update NEXT_PUBLIC_API_URL, NEXT_PUBLIC_APP_URL, MINIO_PUBLIC_URL,
-#     CORS_ORIGIN and BETTER_AUTH_URL in .env to https://<DOMAIN>[:port] values.
+#   - Update NEXT_PUBLIC_API_URL, NEXT_PUBLIC_APP_URL, CORS_ORIGIN and
+#     BETTER_AUTH_URL in .env to https://<DOMAIN>[:port] values.
 #   - Set a real BETTER_AUTH_SECRET (the API refuses to start in production
 #     with the placeholder value) and rotate POSTGRES_PASSWORD/MINIO_SECRET_KEY.
 

@@ -186,6 +186,32 @@ Adds the `ApiKey` table to the database.
 
 ---
 
+## Phase 6 — Security Hardening & Bug Fixes ✅ Complete
+
+- [x] **File storage locked down** — the MinIO bucket is now private (no public-read policy); uploaded files are streamed through a new permission-gated proxy route instead of a direct MinIO URL. `MINIO_PUBLIC_URL` is no longer used to build file links.
+- [x] **Invite privilege-escalation fix** — signup no longer grants an invite's role by email match alone (which let anyone who knew a pending invite's email address sign up as that address and inherit its role, including site-wide Admin). The role is now granted only via a new authenticated redeem step that requires the actual invite token.
+- [x] **Atomic first-admin claim** — replaced a racy `count(User) === 0` check with a DB-serialized claim (new `SystemState` singleton row) so two concurrent signups on a fresh instance can't both become Admin.
+- [x] **Atomic last-admin guards** — workspace member role-change/removal now locks the workspace's admin rows (`SELECT ... FOR UPDATE`) before checking "is this the last admin", closing a race where two concurrent demotions/removals could jointly zero out a workspace's admins.
+- [x] **SSRF DNS-pinning** — link/embed URL fetching now re-validates and pins the resolved IP at fetch time, closing a TOCTOU gap where a DNS record could change between the SSRF check and the actual request.
+- [x] **Relation/rollup access checks** — a database's relation column can now only target a page the editor configuring it actually has access to; rollup computation ignores related rows that don't belong to the relation's configured (and access-checked) target page, closing a path to read rows from an inaccessible page via a crafted schema.
+- [x] **Page-tree cycle fix** — the admin archive query no longer infinite-loops if a page's parent chain contains a cycle.
+- [x] **Upload filename sanitization** — non-alphanumeric characters are stripped from an uploaded file's extension before it's used to build the MinIO storage key, closing a potential path-traversal via a crafted filename.
+- [x] **Table hydration fix** — dnd-kit's screen-reader announcer no longer renders inside `<tr>`/`<thead>`, which was invalid HTML and broke hydration.
+- [x] **`/database` slash command fix** — the inline slash command now passes the correct workspace id (and preserves the parent page id), fixing a "Not a member of this workspace" error when nesting a new database under the current page.
+- [x] Performance: batched Notion/spreadsheet import inserts, coalesced API-key `lastUsed` writes, capped a few previously-unbounded list queries (e.g. `GET /api/v1/pages`)
+
+**Schema changes:**
+- `SystemState` — singleton row (`id` always `1`) used to atomically claim the first-admin signup.
+
+**New API routes:**
+- `GET /api/files/:id/content` — streams a file's bytes, gated on page access (or public-page status) since the MinIO bucket is now private (`apps/api/src/routes/files.ts`)
+- `POST /api/invites/:token/redeem` — grants the invite's role to the authenticated caller; requires the real token and a matching email (`apps/api/src/routes/invites.ts`)
+
+**Removed:**
+- Public MinIO bucket policy — file bytes are no longer reachable directly from MinIO; always go through `/api/files/:id/content`.
+
+---
+
 ## First Boot Instructions
 
 ```bash
