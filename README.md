@@ -127,7 +127,11 @@ the internet.
    for the API). Port `9000` (MinIO) doesn't need to be open — file storage is
    private and only reachable through the API proxy; leave it closed unless
    you specifically want direct S3 API access to the bucket for outside
-   tooling (e.g. `mc`/`rclone` backups).
+   tooling (e.g. `mc`/`rclone` backups). Check **both** the OS firewall
+   (`ufw`/`iptables`) and, if your provider has one, its separate cloud/network
+   firewall in the control panel (e.g. DigitalOcean Cloud Firewalls) — `ufw`
+   can report `inactive` while the provider's own firewall still silently
+   drops the connection.
 3. Clone the repo and configure `.env`:
 
    ```bash
@@ -138,7 +142,12 @@ the internet.
    echo "BETTER_AUTH_SECRET=$(openssl rand -base64 32)" >> .env
    ```
 
-4. Edit `.env` to set your real domain and matching public URLs:
+4. Edit `.env` to set your real domain and matching public URLs. **Only the
+   two API-facing URLs get `:3001` appended — `CORS_ORIGIN` and
+   `NEXT_PUBLIC_APP_URL` must NOT have a port**, since Caddy serves the web
+   app on the domain's default HTTPS port (443), not on `:3000` (that port
+   only exists in local dev). Copying the `:3000`/`:3001` pattern from
+   `.env.example` onto all four vars is the most common mistake here:
 
    ```
    DOMAIN=yourdomain.com
@@ -149,16 +158,33 @@ the internet.
    NEXT_PUBLIC_APP_URL=https://yourdomain.com
    ```
 
+   A mismatch here doesn't fail loudly — the site loads fine, but logging in
+   fails with a generic "could not reach the server" because the browser's
+   request `Origin` won't match `CORS_ORIGIN` and the API rejects it.
+
 5. Rotate the default credentials in `.env` — `POSTGRES_PASSWORD`,
    `MINIO_ACCESS_KEY`/`MINIO_SECRET_KEY` — the API refuses to start in
    production with the placeholder `BETTER_AUTH_SECRET`, and you shouldn't
    ship the example Postgres/MinIO passwords to a public host either.
 
-6. Start the stack with the production overlay:
+6. Start the stack with the production overlay, forcing a build so it can't
+   reuse a stale image built under a different target (see Troubleshooting
+   below if you ever ran a bare `docker compose build`/`up` without both `-f`
+   flags first):
 
    ```bash
-   docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d
+   docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d --build
    docker compose exec api pnpm db:push
+   ```
+
+   On a small VPS (2GB RAM or less), `next build` can be slow and is at risk
+   of being OOM-killed partway through. Add a swapfile first if you don't
+   already have one:
+
+   ```bash
+   sudo fallocate -l 2G /swapfile && sudo chmod 600 /swapfile
+   sudo mkswap /swapfile && sudo swapon /swapfile
+   echo '/swapfile none swap sw 0 0' | sudo tee -a /etc/fstab
    ```
 
 Caddy will automatically request and renew a Let's Encrypt certificate for
@@ -167,6 +193,36 @@ internet for the ACME HTTP-01 challenge).
 
 The production overlay builds standalone/optimized images (no source bind
 mounts), so after pulling new code you need `docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d --build` to pick it up.
+
+---
+
+## Troubleshooting a VPS deploy
+
+- **Blank page, or a red "Build Error" page with an import trace, right after
+  deploying.** Run `docker inspect <container> --format '{{.Config.Cmd}}'`
+  against the `web` container. If it prints `next dev` instead of
+  `node server.js`, the image was actually built under the `development`
+  target — this happens if `docker compose build`/`up` was ever run without
+  **both** `-f docker-compose.yml -f docker-compose.prod.yml` flags, since
+  Compose only builds an image if that tag doesn't already exist and won't
+  rebuild it just because a later command adds `target: production`. Fix:
+  `docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d --build`.
+- **"Could not reach the server" when logging in, but the page itself loads
+  fine.** A CORS mismatch — see the note on `CORS_ORIGIN`/`NEXT_PUBLIC_APP_URL`
+  in step 4 above. Remember `NEXT_PUBLIC_*` vars are baked into the client
+  bundle at build time, so after editing `.env` you need
+  `docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d --build web`,
+  not just a restart.
+- **Site unreachable / connection refused entirely.** Confirm DNS actually
+  points at the VPS (`dig +short yourdomain.com` should match
+  `curl -s ifconfig.me` run on the VPS), and check `docker compose ps -a` —
+  if a container (especially `caddy`) is missing entirely rather than just
+  stopped, something removed it (e.g. a prior `docker compose down`); bring
+  the whole stack back with a plain
+  `docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d`
+  rather than restarting individual services, since services aren't
+  recreated as a side effect of starting something that merely depends on
+  them.
 
 ---
 
