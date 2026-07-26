@@ -129,8 +129,14 @@ export function SchemaBuilder({ schema, onUpdate, onUpdateRow, onClose }: Props)
               </button>
               <span className="text-gray-400 dark:text-gray-500 flex-shrink-0">{TYPE_ICONS[col.type]}</span>
               <input
-                value={col.name}
-                onChange={(e) => updateColumn(col.id, { name: e.target.value })}
+                key={col.id}
+                defaultValue={col.name}
+                onBlur={(e) => {
+                  if (e.target.value !== col.name) updateColumn(col.id, { name: e.target.value })
+                }}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') (e.target as HTMLInputElement).blur()
+                }}
                 className="flex-1 text-sm text-gray-800 dark:text-gray-200 outline-none bg-transparent min-w-0"
                 disabled={idx === 0}
               />
