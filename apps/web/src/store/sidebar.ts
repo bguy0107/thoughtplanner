@@ -5,6 +5,7 @@ interface SidebarStore {
   pages: PageSummary[]
   loading: boolean
   collapsed: boolean
+  expandedIds: Set<string>
   fetchPages: (workspaceId?: string) => Promise<void>
   setPages: (pages: PageSummary[]) => void
   addPage: (workspaceId: string, parentPageId?: string) => Promise<PageSummary>
@@ -12,12 +13,15 @@ interface SidebarStore {
   updatePage: (id: string, data: Partial<PageSummary>) => void
   removePage: (id: string) => void
   toggleCollapsed: () => void
+  expandPage: (id: string) => void
+  toggleExpanded: (id: string) => void
 }
 
 export const useSidebarStore = create<SidebarStore>((set, get) => ({
   pages: [],
   loading: false,
   collapsed: false,
+  expandedIds: new Set(),
 
   fetchPages: async (workspaceId) => {
     if (!workspaceId) { set({ pages: [] }); return }
@@ -53,21 +57,22 @@ export const useSidebarStore = create<SidebarStore>((set, get) => ({
     set((s) => {
       // The server cascades archival to descendants too, so drop them from local
       // state as well — otherwise they'd linger, unreachable, under a removed parent.
-      const toRemove = new Set([id])
-      let grew = true
-      while (grew) {
-        grew = false
-        for (const p of s.pages) {
-          if (p.parentPageId && toRemove.has(p.parentPageId) && !toRemove.has(p.id)) {
-            toRemove.add(p.id)
-            grew = true
-          }
-        }
-      }
+      const toRemove = new Set([id, ...getDescendantIds(s.pages, id)])
       return { pages: s.pages.filter((p) => !toRemove.has(p.id)) }
     }),
 
   toggleCollapsed: () => set((s) => ({ collapsed: !s.collapsed })),
+
+  expandPage: (id) =>
+    set((s) => (s.expandedIds.has(id) ? s : { expandedIds: new Set(s.expandedIds).add(id) })),
+
+  toggleExpanded: (id) =>
+    set((s) => {
+      const next = new Set(s.expandedIds)
+      if (next.has(id)) next.delete(id)
+      else next.add(id)
+      return { expandedIds: next }
+    }),
 }))
 
 // Derive a tree structure from the flat page list
@@ -79,4 +84,21 @@ export function buildPageTree(pages: PageSummary[]) {
     map.get(key)!.push(p)
   }
   return map
+}
+
+// All ids nested (at any depth) under `id`, used to keep drag-and-drop from
+// nesting a page inside its own subtree and to cascade local removal.
+export function getDescendantIds(pages: PageSummary[], id: string): Set<string> {
+  const result = new Set<string>()
+  let grew = true
+  while (grew) {
+    grew = false
+    for (const p of pages) {
+      if (p.parentPageId && (p.parentPageId === id || result.has(p.parentPageId)) && !result.has(p.id)) {
+        result.add(p.id)
+        grew = true
+      }
+    }
+  }
+  return result
 }

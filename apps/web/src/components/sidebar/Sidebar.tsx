@@ -1,11 +1,25 @@
 'use client'
 
-import { useMemo, useState } from 'react'
+import { useMemo, useRef, useState } from 'react'
 import { useRouter } from 'next/navigation'
-import { Plus, PanelLeftClose, Table2, Search, Settings, FileDown, FileSpreadsheet } from 'lucide-react'
+import { Plus, PanelLeftClose, Table2, FileText, Search, Settings, FileDown, FileSpreadsheet } from 'lucide-react'
+import {
+  DndContext,
+  DragOverlay,
+  pointerWithin,
+  PointerSensor,
+  useSensor,
+  useSensors,
+  type DragStartEvent,
+  type DragOverEvent,
+  type DragEndEvent,
+} from '@dnd-kit/core'
 import { signOut, useSession } from '@/lib/auth-client'
-import { useSidebarStore, buildPageTree } from '@/store/sidebar'
+import { useSidebarStore, buildPageTree, getDescendantIds } from '@/store/sidebar'
+import { api, type PageSummary } from '@/lib/api'
+import { positionBetween } from '@/lib/position'
 import { PageTree } from './PageTree'
+import { SidebarDragContext, parseZoneId } from './sidebar-dnd'
 import { WorkspaceSwitcher } from './WorkspaceSwitcher'
 import { SearchModal } from '@/components/SearchModal'
 import { NotionImportModal } from '@/components/NotionImportModal'
@@ -16,13 +30,113 @@ import { useWorkspaceStore } from '@/store/workspace'
 export function Sidebar({ onClose }: { onClose?: () => void }) {
   const router = useRouter()
   const { data: session } = useSession()
-  const { addPage, addDatabase, toggleCollapsed, fetchPages } = useSidebarStore()
+  const { addPage, addDatabase, toggleCollapsed, fetchPages, updatePage, setPages, expandPage } = useSidebarStore()
   const pages = useSidebarStore((s) => s.pages)
+  const expandedIds = useSidebarStore((s) => s.expandedIds)
   const currentWorkspaceId = useWorkspaceStore((s) => s.currentWorkspaceId)
   const tree = useMemo(() => buildPageTree(pages), [pages])
   const [searchOpen, setSearchOpen] = useState(false)
   const [importOpen, setImportOpen] = useState(false)
   const [spreadsheetImportOpen, setSpreadsheetImportOpen] = useState(false)
+
+  const [activeId, setActiveId] = useState<string | null>(null)
+  const [overId, setOverId] = useState<string | null>(null)
+  const [invalidTargetIds, setInvalidTargetIds] = useState<Set<string>>(new Set())
+  const hoverExpandRef = useRef<{ id: string; timer: ReturnType<typeof setTimeout> } | null>(null)
+  const snapshotRef = useRef<PageSummary[] | null>(null)
+
+  const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 6 } }))
+  const activePage = activeId ? pages.find((p) => p.id === activeId) ?? null : null
+
+  function clearHoverExpandTimer() {
+    if (hoverExpandRef.current) {
+      clearTimeout(hoverExpandRef.current.timer)
+      hoverExpandRef.current = null
+    }
+  }
+
+  function handleDragStart(event: DragStartEvent) {
+    const id = event.active.id as string
+    snapshotRef.current = pages
+    setActiveId(id)
+    setOverId(null)
+    const invalid = getDescendantIds(pages, id)
+    invalid.add(id)
+    setInvalidTargetIds(invalid)
+  }
+
+  function handleDragOver(event: DragOverEvent) {
+    const overIdStr = event.over ? String(event.over.id) : null
+    setOverId(overIdStr)
+
+    const parsed = overIdStr ? parseZoneId(overIdStr) : null
+    if (parsed?.zone === 'inside' && !expandedIds.has(parsed.pageId)) {
+      if (hoverExpandRef.current?.id !== parsed.pageId) {
+        clearHoverExpandTimer()
+        const targetId = parsed.pageId
+        hoverExpandRef.current = { id: targetId, timer: setTimeout(() => expandPage(targetId), 600) }
+      }
+    } else {
+      clearHoverExpandTimer()
+    }
+  }
+
+  async function handleDragEnd(event: DragEndEvent) {
+    clearHoverExpandTimer()
+    setActiveId(null)
+    setOverId(null)
+    setInvalidTargetIds(new Set())
+
+    const { active, over } = event
+    if (!over) return
+    const parsed = parseZoneId(String(over.id))
+    if (!parsed) return
+    const { zone, pageId: targetId } = parsed
+    const draggedId = active.id as string
+    if (targetId === draggedId) return
+
+    const currentPages = useSidebarStore.getState().pages
+    if (getDescendantIds(currentPages, draggedId).has(targetId)) return
+
+    const target = currentPages.find((p) => p.id === targetId)
+    if (!target) return
+
+    let newParentPageId: string | null
+    let position: number
+
+    if (zone === 'inside') {
+      newParentPageId = targetId
+      const siblings = currentPages
+        .filter((p) => p.parentPageId === targetId && p.id !== draggedId)
+        .sort((a, b) => a.position - b.position)
+      position = positionBetween(siblings[siblings.length - 1]?.position, undefined)
+    } else {
+      newParentPageId = target.parentPageId
+      const siblings = currentPages
+        .filter((p) => p.parentPageId === target.parentPageId && p.id !== draggedId)
+        .sort((a, b) => a.position - b.position)
+      const idx = siblings.findIndex((p) => p.id === targetId)
+      position = zone === 'before'
+        ? positionBetween(siblings[idx - 1]?.position, siblings[idx]?.position)
+        : positionBetween(siblings[idx]?.position, siblings[idx + 1]?.position)
+    }
+
+    updatePage(draggedId, { parentPageId: newParentPageId, position })
+    if (zone === 'inside') expandPage(targetId)
+
+    try {
+      await api.pages.update(draggedId, { parentPageId: newParentPageId, position })
+    } catch {
+      if (snapshotRef.current) setPages(snapshotRef.current)
+    }
+  }
+
+  function handleDragCancel() {
+    clearHoverExpandTimer()
+    setActiveId(null)
+    setOverId(null)
+    setInvalidTargetIds(new Set())
+  }
 
   async function handleNewPage() {
     if (!currentWorkspaceId) return
@@ -75,7 +189,32 @@ export function Sidebar({ onClose }: { onClose?: () => void }) {
 
         {/* Page tree */}
         <div className="flex-1 overflow-y-auto py-2">
-          <PageTree parentId={null} depth={0} tree={tree} />
+          <DndContext
+            sensors={sensors}
+            collisionDetection={pointerWithin}
+            onDragStart={handleDragStart}
+            onDragOver={handleDragOver}
+            onDragEnd={handleDragEnd}
+            onDragCancel={handleDragCancel}
+          >
+            <SidebarDragContext.Provider value={{ overId, invalidTargetIds }}>
+              <PageTree parentId={null} depth={0} tree={tree} />
+            </SidebarDragContext.Provider>
+            <DragOverlay>
+              {activePage && (
+                <div className="flex items-center gap-1.5 px-2 py-1 rounded-sm bg-white dark:bg-sidebar-dark-hover shadow-lg border border-gray-200 dark:border-gray-700 text-sm text-gray-700 dark:text-sidebar-dark-text">
+                  <span className="flex-shrink-0 text-base leading-none">
+                    {activePage.icon
+                      ? activePage.icon
+                      : activePage.isDatabase
+                        ? <Table2 size={14} className="text-gray-400 dark:text-sidebar-dark-muted" />
+                        : <FileText size={14} className="text-gray-400 dark:text-sidebar-dark-muted" />}
+                  </span>
+                  <span className="truncate max-w-[160px]">{activePage.title || 'Untitled'}</span>
+                </div>
+              )}
+            </DragOverlay>
+          </DndContext>
         </div>
 
         {/* Footer */}
