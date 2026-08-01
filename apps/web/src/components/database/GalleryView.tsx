@@ -92,9 +92,8 @@ export function GalleryView({ schema, onUpdateRow, onDeleteRow, onAddRow }: Prop
   const nameCol = schema.columns[0]
 
   function handleEditName(rowId: string, name: string) {
-    const row = schema.rows.find((r) => r.id === rowId)
-    if (!row || !nameCol) return
-    onUpdateRow(rowId, { ...(row.properties as Record<string, unknown>), [nameCol.id]: name })
+    if (!nameCol) return
+    onUpdateRow(rowId, { [nameCol.id]: name })
   }
 
   return (

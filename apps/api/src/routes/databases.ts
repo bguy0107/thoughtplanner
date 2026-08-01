@@ -189,9 +189,21 @@ export async function databaseRoutes(app: FastifyInstance) {
       }
     }
 
-    const schema = await prisma.databaseSchema.update({
-      where: { pageId: req.params.pageId },
-      data: { columns: body.data.columns },
+    const schema = await prisma.$transaction(async (tx) => {
+      // The client's `columns` array reflects a possibly-stale snapshot and
+      // is a full positional replace (needed for reordering), so it can't be
+      // merged against a concurrent writer without risking silently
+      // resurrecting a column someone else just deleted. FOR UPDATE at least
+      // makes the two writers' updates atomic instead of interleaved; see
+      // the spreadsheet-append path in import.ts for the complementary
+      // "additive only" side of this race, which merges safely because it
+      // never removes columns.
+      await tx.$executeRaw`SELECT id FROM "DatabaseSchema" WHERE "pageId" = ${req.params.pageId} FOR UPDATE`
+
+      return tx.databaseSchema.update({
+        where: { pageId: req.params.pageId },
+        data: { columns: body.data.columns },
+      })
     })
     await touchPage(req.params.pageId, session.user.id)
 
@@ -212,20 +224,25 @@ export async function databaseRoutes(app: FastifyInstance) {
     const schema = await prisma.databaseSchema.findUnique({ where: { pageId: req.params.pageId } })
     if (!schema) return reply.status(404).send({ error: 'No schema' })
 
-    // Place new row at end of the existing ones.
-    const last = await prisma.databaseRow.findFirst({
-      where: { pageId: req.params.pageId },
-      select: { position: true },
-      orderBy: { position: 'desc' },
-    })
+    const row = await prisma.$transaction(async (tx) => {
+      // Same "read max, then insert at max+1" race as page creation — serialize
+      // per pageId so two concurrent row creates can't both land on the same position.
+      await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${`row-position:${req.params.pageId}`}))`
 
-    const row = await prisma.databaseRow.create({
-      data: {
-        pageId: req.params.pageId,
-        schemaId: schema.id,
-        properties: body.data.properties as Prisma.InputJsonValue,
-        position: last ? last.position + 1 : 0,
-      },
+      const last = await tx.databaseRow.findFirst({
+        where: { pageId: req.params.pageId },
+        select: { position: true },
+        orderBy: { position: 'desc' },
+      })
+
+      return tx.databaseRow.create({
+        data: {
+          pageId: req.params.pageId,
+          schemaId: schema.id,
+          properties: body.data.properties as Prisma.InputJsonValue,
+          position: last ? last.position + 1 : 0,
+        },
+      })
     })
     await touchPage(req.params.pageId, session.user.id)
 
@@ -251,12 +268,29 @@ export async function databaseRoutes(app: FastifyInstance) {
 
     const { properties, position } = body.data
 
-    const row = await prisma.databaseRow.update({
-      where: { id: req.params.rowId },
-      data: {
-        ...(properties !== undefined ? { properties: properties as Prisma.InputJsonValue } : {}),
-        ...(position !== undefined ? { position } : {}),
-      },
+    const row = await prisma.$transaction(async (tx) => {
+      // `properties` is a partial patch (see api.ts / TableView etc. — callers
+      // now send only the field(s) they changed, not the whole object) and is
+      // merged into the current row here, inside a lock, rather than replacing
+      // it wholesale. That closes the lost-update race where two edits to
+      // different fields of the same row (e.g. tabbing from a text cell to a
+      // checkbox) fire close together: without the lock+merge, whichever
+      // request's full-object snapshot landed last would silently overwrite
+      // the other's field.
+      const [locked] = await tx.$queryRaw<Array<{ properties: Record<string, unknown> }>>`
+        SELECT properties FROM "DatabaseRow" WHERE id = ${req.params.rowId} FOR UPDATE
+      `
+      const mergedProperties = properties !== undefined
+        ? { ...(locked?.properties ?? {}), ...properties }
+        : undefined
+
+      return tx.databaseRow.update({
+        where: { id: req.params.rowId },
+        data: {
+          ...(mergedProperties !== undefined ? { properties: mergedProperties as Prisma.InputJsonValue } : {}),
+          ...(position !== undefined ? { position } : {}),
+        },
+      })
     })
     // A pure position change is a drag-to-reorder, not an edit — don't bump
     // "last modified" for that, only for actual property changes.

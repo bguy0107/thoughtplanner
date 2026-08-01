@@ -5,12 +5,19 @@ import { type NextRequest, NextResponse } from 'next/server'
 // from the session-cookie gate below like the auth pages are.
 const PUBLIC_PATHS = ['/login', '/signup', '/share']
 
+// Exact-segment match so a future route sharing a prefix (e.g. `/login-help`)
+// doesn't accidentally bypass the session gate below — startsWith alone would
+// treat any of these as a public path too.
+function isPublicPath(pathname: string): boolean {
+  return PUBLIC_PATHS.some((p) => pathname === p || pathname.startsWith(`${p}/`))
+}
+
 export function middleware(req: NextRequest) {
   const { pathname } = req.nextUrl
 
   // Allow public auth pages and Next internals
   if (
-    PUBLIC_PATHS.some((p) => pathname.startsWith(p)) ||
+    isPublicPath(pathname) ||
     pathname.startsWith('/_next') ||
     pathname.startsWith('/favicon')
   ) {

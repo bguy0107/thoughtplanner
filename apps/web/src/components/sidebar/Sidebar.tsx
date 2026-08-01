@@ -17,7 +17,7 @@ import {
 import { signOut, useSession } from '@/lib/auth-client'
 import { useSidebarStore, buildPageTree, getDescendantIds } from '@/store/sidebar'
 import { api, type PageSummary } from '@/lib/api'
-import { positionBetween } from '@/lib/position'
+import { positionBetween, resolveInsertPosition } from '@/lib/position'
 import { PageTree } from './PageTree'
 import { SidebarDragContext, parseZoneId } from './sidebar-dnd'
 import { WorkspaceSwitcher } from './WorkspaceSwitcher'
@@ -103,29 +103,40 @@ export function Sidebar({ onClose }: { onClose?: () => void }) {
 
     let newParentPageId: string | null
     let position: number
+    // Set when the target gap has no float64 precision left for a distinct
+    // midpoint (see resolveInsertPosition) — every listed sibling needs its
+    // position persisted, not just the dragged page.
+    let rebalanced: { id: string; position: number }[] | undefined
 
     if (zone === 'inside') {
       newParentPageId = targetId
       const siblings = currentPages
         .filter((p) => p.parentPageId === targetId && p.id !== draggedId)
         .sort((a, b) => a.position - b.position)
-      position = positionBetween(siblings[siblings.length - 1]?.position, undefined)
+      // Open-ended (no "after" neighbor) — always has room, never needs rebalancing.
+      position = positionBetween(siblings[siblings.length - 1]?.position, undefined)!
     } else {
       newParentPageId = target.parentPageId
       const siblings = currentPages
         .filter((p) => p.parentPageId === target.parentPageId && p.id !== draggedId)
         .sort((a, b) => a.position - b.position)
+        .map((p) => ({ id: p.id, position: p.position }))
       const idx = siblings.findIndex((p) => p.id === targetId)
-      position = zone === 'before'
-        ? positionBetween(siblings[idx - 1]?.position, siblings[idx]?.position)
-        : positionBetween(siblings[idx]?.position, siblings[idx + 1]?.position)
+      const insertIndex = zone === 'before' ? idx : idx + 1
+      ;({ position, rebalanced } = resolveInsertPosition(siblings, insertIndex))
     }
 
+    for (const s of rebalanced ?? []) {
+      updatePage(s.id, { position: s.position })
+    }
     updatePage(draggedId, { parentPageId: newParentPageId, position })
     if (zone === 'inside') expandPage(targetId)
 
     try {
-      await api.pages.update(draggedId, { parentPageId: newParentPageId, position })
+      await Promise.all([
+        ...(rebalanced ?? []).map((s) => api.pages.update(s.id, { position: s.position })),
+        api.pages.update(draggedId, { parentPageId: newParentPageId, position }),
+      ])
     } catch {
       if (snapshotRef.current) setPages(snapshotRef.current)
     }

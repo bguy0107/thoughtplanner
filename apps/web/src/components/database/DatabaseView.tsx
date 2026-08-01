@@ -59,9 +59,13 @@ export function DatabaseView({ page, onTitleChange }: Props) {
   }, [page.id, refreshMeta])
 
   const handleUpdateRow = useCallback(async (rowId: string, properties: Record<string, unknown>) => {
-    await api.databases.updateRow(rowId, properties)
+    // `properties` here is a partial patch — only the field(s) that changed
+    // (see TableView/BoardView/etc). The server merges it server-side and
+    // returns the full row, which is what local state must adopt; applying
+    // the partial patch directly to local state would drop every other field.
+    const updated = await api.databases.updateRow(rowId, properties)
     setSchema((s) => s
-      ? { ...s, rows: s.rows.map((r) => r.id === rowId ? { ...r, properties } : r) }
+      ? { ...s, rows: s.rows.map((r) => r.id === rowId ? updated : r) }
       : s)
     refreshMeta()
   }, [refreshMeta])

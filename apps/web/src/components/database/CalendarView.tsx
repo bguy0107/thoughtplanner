@@ -83,10 +83,7 @@ export function CalendarView({ schema, onAddRow, onDeleteRow, onUpdateRow }: Pro
 
   function commitEdit() {
     if (!editingRow) return
-    onUpdateRow(editingRow.rowId, {
-      ...(schema.rows.find((r) => r.id === editingRow.rowId)?.properties as Record<string, unknown> ?? {}),
-      [editingRow.colId]: editingRow.value,
-    })
+    onUpdateRow(editingRow.rowId, { [editingRow.colId]: editingRow.value })
     setEditingRow(null)
   }
 

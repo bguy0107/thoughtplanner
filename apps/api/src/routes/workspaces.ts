@@ -98,7 +98,7 @@ export async function workspaceRoutes(app: FastifyInstance) {
     return workspace
   })
 
-  // DELETE /api/workspaces/:id — ADMIN only, must have no non-archived pages
+  // DELETE /api/workspaces/:id — ADMIN only, must have no pages at all
   app.delete<{ Params: { id: string } }>('/api/workspaces/:id', async (req, reply) => {
     const session = await getSession(req)
     if (!session) return reply.status(401).send({ error: 'Unauthorized' })
@@ -106,11 +106,15 @@ export async function workspaceRoutes(app: FastifyInstance) {
     const access = await requireWorkspaceMember(session.user.id, req.params.id, 'ADMIN')
     if (!access.ok) return reply.status(access.status).send({ error: access.error })
 
+    // Page.workspace is onDelete: Restrict, and that FK is still held by
+    // archived-but-not-purged pages — so this must count ALL pages, not just
+    // non-archived ones, or workspace.delete() below throws an unhandled
+    // FK-violation 500 instead of this clean 409.
     const remainingPages = await prisma.page.count({
-      where: { workspaceId: req.params.id, isArchived: false },
+      where: { workspaceId: req.params.id },
     })
     if (remainingPages > 0) {
-      return reply.status(409).send({ error: 'Archive or delete all pages before deleting the workspace' })
+      return reply.status(409).send({ error: 'Delete or purge all pages (including trashed ones) before deleting the workspace' })
     }
 
     await prisma.workspace.delete({ where: { id: req.params.id } })

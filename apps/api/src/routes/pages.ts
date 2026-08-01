@@ -103,44 +103,59 @@ export async function pageRoutes(app: FastifyInstance) {
     if (body.data.parentPageId) {
       const parent = await prisma.page.findUnique({
         where: { id: body.data.parentPageId },
-        select: { workspaceId: true },
+        select: { workspaceId: true, isArchived: true },
       })
       if (!parent) return reply.status(404).send({ error: 'Parent page not found' })
       if (parent.workspaceId !== body.data.workspaceId) {
         return reply.status(400).send({ error: 'Parent page belongs to a different workspace' })
       }
+      // A live page under an archived parent is invisible in both the sidebar
+      // (parent isn't returned by GET /api/pages) and the trash view (it isn't
+      // archived itself) — and gets silently destroyed if the archived
+      // ancestor is later purged. Restore the parent first instead.
+      if (parent.isArchived) {
+        return reply.status(400).send({ error: 'Cannot create a page under an archived parent' })
+      }
     }
 
-    // Place new page at end of its siblings
-    const siblings = await prisma.page.findMany({
-      where: {
-        workspaceId: body.data.workspaceId,
-        parentPageId: body.data.parentPageId ?? null,
-        isArchived: false,
-      },
-      select: { position: true },
-      orderBy: { position: 'desc' },
-      take: 1,
-    })
-    const position = body.data.position ?? (siblings[0] ? siblings[0].position + 1 : 0)
+    const page = await prisma.$transaction(async (tx) => {
+      // Serialize position assignment per (workspace, parent) list so two
+      // concurrent creates under the same parent can't both read the same
+      // "end of siblings" position and collide.
+      await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${`${body.data.workspaceId}:${body.data.parentPageId ?? 'root'}`}))`
 
-    const page = await prisma.page.create({
-      data: {
-        ...body.data,
-        position,
-        createdById: session.user.id,
-        updatedById: session.user.id,
-      },
-    })
+      const siblings = await tx.page.findMany({
+        where: {
+          workspaceId: body.data.workspaceId,
+          parentPageId: body.data.parentPageId ?? null,
+          isArchived: false,
+        },
+        select: { position: true },
+        orderBy: { position: 'desc' },
+        take: 1,
+      })
+      const position = body.data.position ?? (siblings[0] ? siblings[0].position + 1 : 0)
 
-    if (page.isDatabase) {
-      await prisma.databaseSchema.create({
+      const created = await tx.page.create({
         data: {
-          pageId: page.id,
-          columns: [{ id: randomUUID(), name: 'Name', type: 'text' }],
+          ...body.data,
+          position,
+          createdById: session.user.id,
+          updatedById: session.user.id,
         },
       })
-    }
+
+      if (created.isDatabase) {
+        await tx.databaseSchema.create({
+          data: {
+            pageId: created.id,
+            columns: [{ id: randomUUID(), name: 'Name', type: 'text' }],
+          },
+        })
+      }
+
+      return created
+    })
 
     return reply.status(201).send(page)
   })
@@ -163,11 +178,17 @@ export async function pageRoutes(app: FastifyInstance) {
 
       const parent = await prisma.page.findUnique({
         where: { id: body.data.parentPageId },
-        select: { workspaceId: true },
+        select: { workspaceId: true, isArchived: true },
       })
       if (!parent) return reply.status(404).send({ error: 'Parent page not found' })
       if (parent.workspaceId !== access.workspaceId) {
         return reply.status(400).send({ error: 'Cannot move a page to a different workspace' })
+      }
+      // See the matching check in POST /api/pages — a live page parented
+      // under an archived one becomes invisible and gets destroyed if that
+      // ancestor is purged.
+      if (parent.isArchived) {
+        return reply.status(400).send({ error: 'Cannot move a page under an archived parent' })
       }
 
       // Reject moving a page under one of its own descendants — that would

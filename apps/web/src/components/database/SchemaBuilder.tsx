@@ -81,8 +81,11 @@ export function SchemaBuilder({ schema, onUpdate, onUpdateRow, onClose }: Props)
     })
     for (const row of schema.rows) {
       if (row.properties[col.id] === undefined) continue
-      const { [col.id]: _removed, ...rest } = row.properties
-      onUpdateRow(row.id, rest)
+      // Setting to null (rather than sending a diff that omits the key) matches
+      // onUpdateRow's partial-patch contract — the server merges keys present
+      // in the patch, so an omitted key wouldn't clear anything. getProp()
+      // treats null the same as "absent" everywhere else in the database views.
+      onUpdateRow(row.id, { [col.id]: null })
     }
   }
 
@@ -99,9 +102,9 @@ export function SchemaBuilder({ schema, onUpdate, onUpdateRow, onClose }: Props)
     for (const row of schema.rows) {
       const val = row.properties[col.id]
       if (col.type === 'select' && val === opt) {
-        onUpdateRow(row.id, { ...row.properties, [col.id]: null })
+        onUpdateRow(row.id, { [col.id]: null })
       } else if (col.type === 'multi_select' && Array.isArray(val) && val.includes(opt)) {
-        onUpdateRow(row.id, { ...row.properties, [col.id]: (val as string[]).filter((v) => v !== opt) })
+        onUpdateRow(row.id, { [col.id]: (val as string[]).filter((v) => v !== opt) })
       }
     }
   }

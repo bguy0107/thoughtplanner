@@ -63,6 +63,11 @@ export function usePageSync(
           const msg = JSON.parse(event.data as string)
           if (msg.type === 'page:content' && msg.pageId === pageId) {
             if (!editorRef.current) return
+            // Same guard as the reconnect path above: if this client has its
+            // own unsent edit sitting in the debounce window, a remote save
+            // landing right now must not stomp it. It'll be reconciled once
+            // this client's own save goes out.
+            if (hasPendingRef.current?.()) return
             suppressRef.current = true
             editorRef.current.commands.setContent(msg.content as object, false)
             suppressRef.current = false

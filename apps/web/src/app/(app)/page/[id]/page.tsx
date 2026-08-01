@@ -33,8 +33,12 @@ export default function PageView({ params }: { params: Promise<{ id: string }> }
 
   // PATCH responses always carry the fresh updatedAt/updatedBy — merge them in
   // so the "last edited" label reflects the save without a separate refetch.
-  const applyMeta = useCallback((updated: Pick<Page, 'updatedAt' | 'updatedBy'>) => {
-    setPage((p) => p ? { ...p, updatedAt: updated.updatedAt, updatedBy: updated.updatedBy } : p)
+  // Takes the id the request was made *for* and no-ops if the user has since
+  // navigated to a different page — otherwise a slow response for page A
+  // (e.g. the debounced editor save firing after the user already clicked
+  // away) lands on whatever page is current and stamps A's metadata onto it.
+  const applyMeta = useCallback((forId: string, updated: Pick<Page, 'updatedAt' | 'updatedBy'>) => {
+    setPage((p) => p && p.id === forId ? { ...p, updatedAt: updated.updatedAt, updatedBy: updated.updatedBy } : p)
   }, [])
 
   const handleTitleChange = useCallback(
@@ -42,7 +46,7 @@ export default function PageView({ params }: { params: Promise<{ id: string }> }
       if (!page) return
       setPage((p) => p ? { ...p, title } : p)
       updatePage(id, { title })
-      applyMeta(await api.pages.update(id, { title }))
+      applyMeta(id, await api.pages.update(id, { title }))
     },
     [id, page, updatePage, applyMeta],
   )
@@ -50,7 +54,7 @@ export default function PageView({ params }: { params: Promise<{ id: string }> }
   const handleContentChange = useCallback(
     async (content: unknown) => {
       if (!page) return
-      applyMeta(await api.pages.update(id, { content }))
+      applyMeta(id, await api.pages.update(id, { content }))
     },
     [id, page, applyMeta],
   )
@@ -59,7 +63,7 @@ export default function PageView({ params }: { params: Promise<{ id: string }> }
     async (icon: string | null) => {
       setPage((p) => p ? { ...p, icon } : p)
       updatePage(id, { icon })
-      applyMeta(await api.pages.update(id, { icon }))
+      applyMeta(id, await api.pages.update(id, { icon }))
     },
     [id, updatePage, applyMeta],
   )
@@ -71,14 +75,14 @@ export default function PageView({ params }: { params: Promise<{ id: string }> }
       e.target.value = ''
       const uploaded = await api.files.upload(id, file)
       setPage((p) => p ? { ...p, coverImage: uploaded.url } : p)
-      applyMeta(await api.pages.update(id, { coverImage: uploaded.url }))
+      applyMeta(id, await api.pages.update(id, { coverImage: uploaded.url }))
     },
     [id, applyMeta],
   )
 
   const handleRemoveCover = useCallback(async () => {
     setPage((p) => p ? { ...p, coverImage: null } : p)
-    applyMeta(await api.pages.update(id, { coverImage: null }))
+    applyMeta(id, await api.pages.update(id, { coverImage: null }))
   }, [id, applyMeta])
 
   const handleRemoteMeta = useCallback(
@@ -99,7 +103,7 @@ export default function PageView({ params }: { params: Promise<{ id: string }> }
     if (!page) return
     const isPublic = !page.isPublic
     setPage((p) => p ? { ...p, isPublic } : p)
-    applyMeta(await api.pages.update(id, { isPublic }))
+    applyMeta(id, await api.pages.update(id, { isPublic }))
   }, [id, page, applyMeta])
 
   const handleCopyShareLink = useCallback(() => {

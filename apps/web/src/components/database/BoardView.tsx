@@ -99,16 +99,11 @@ export function BoardView({ schema, onUpdateRow, onDeleteRow, onAddRow }: Props)
   }
 
   function handleEditName(rowId: string, name: string) {
-    const row = schema.rows.find((r) => r.id === rowId)
-    if (!row) return
-    onUpdateRow(rowId, { ...(row.properties as Record<string, unknown>), [nameCol.id]: name })
+    onUpdateRow(rowId, { [nameCol.id]: name })
   }
 
   function handleMoveCard(rowId: string, newGroup: string | null) {
-    const row = schema.rows.find((r) => r.id === rowId)
-    if (!row) return
-    const props = { ...(row.properties as Record<string, unknown>), [groupCol!.id]: newGroup ?? '' }
-    onUpdateRow(rowId, props)
+    onUpdateRow(rowId, { [groupCol!.id]: newGroup ?? '' })
   }
 
   return (

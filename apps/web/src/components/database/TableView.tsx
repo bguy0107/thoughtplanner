@@ -18,7 +18,7 @@ import {
   useSortable,
 } from '@dnd-kit/sortable'
 import { CSS } from '@dnd-kit/utilities'
-import { positionBetween } from '@/lib/position'
+import { resolveInsertPosition } from '@/lib/position'
 import { cn } from '@/lib/utils'
 import { api, type Column, type ColumnType, type DbRow, type DbSchema, type RelatedRow } from '@/lib/api'
 import { PromptModal } from '@/components/ui/PromptModal'
@@ -248,7 +248,7 @@ export function TableView({ schema, onUpdateRow, onDeleteRow, onAddRow, onUpdate
   function clearCell(row: DbRow, col: Column) {
     if (col.type === 'rollup') return
     const empty = col.type === 'checkbox' ? false : col.type === 'multi_select' || col.type === 'relation' ? [] : null
-    onUpdateRow(row.id, { ...(row.properties as Record<string, unknown>), [col.id]: empty })
+    onUpdateRow(row.id, { [col.id]: empty })
   }
 
   // Only fires for a cell that's merely selected (navigation mode), not the one
@@ -294,8 +294,10 @@ export function TableView({ schema, onUpdateRow, onDeleteRow, onAddRow, onUpdate
   function commitEdit(row: DbRow, colId: string, raw: string) {
     const col = colMap.get(colId)
     if (!col) return
-    const value = col.type === 'number' ? (parseFloat(raw) || 0) : raw
-    onUpdateRow(row.id, { ...(row.properties as Record<string, unknown>), [colId]: value })
+    // An empty/non-numeric input means "cleared", not zero — parseFloat('') || 0
+    // silently turned a blanked-out cell into an explicit 0.
+    const value = col.type === 'number' ? (raw.trim() === '' ? null : (Number.isNaN(parseFloat(raw)) ? null : parseFloat(raw))) : raw
+    onUpdateRow(row.id, { [colId]: value })
     // Only clear if this is still the active cell — Tab/Enter navigation commits
     // and immediately re-targets `editing` to the next cell in the same handler,
     // and the outgoing input's native blur (fired on unmount) must not clobber that.
@@ -304,29 +306,29 @@ export function TableView({ schema, onUpdateRow, onDeleteRow, onAddRow, onUpdate
 
   function toggleCheck(row: DbRow, colId: string) {
     const cur = getProp(row, colId) as boolean | null
-    onUpdateRow(row.id, { ...(row.properties as Record<string, unknown>), [colId]: !cur })
+    onUpdateRow(row.id, { [colId]: !cur })
   }
 
   function setSelect(row: DbRow, colId: string, value: string) {
-    onUpdateRow(row.id, { ...(row.properties as Record<string, unknown>), [colId]: value })
+    onUpdateRow(row.id, { [colId]: value })
     setSelectOpen(null)
   }
 
   function toggleMulti(row: DbRow, colId: string, value: string) {
     const cur = (getProp(row, colId) as string[] | null) ?? []
     const next = cur.includes(value) ? cur.filter((v) => v !== value) : [...cur, value]
-    onUpdateRow(row.id, { ...(row.properties as Record<string, unknown>), [colId]: next })
+    onUpdateRow(row.id, { [colId]: next })
   }
 
   function clearMulti(row: DbRow, colId: string) {
-    onUpdateRow(row.id, { ...(row.properties as Record<string, unknown>), [colId]: [] })
+    onUpdateRow(row.id, { [colId]: [] })
     setSelectOpen(null)
   }
 
   function toggleRelation(row: DbRow, colId: string, targetRowId: string) {
     const cur = (getProp(row, colId) as string[] | null) ?? []
     const next = cur.includes(targetRowId) ? cur.filter((v) => v !== targetRowId) : [...cur, targetRowId]
-    onUpdateRow(row.id, { ...(row.properties as Record<string, unknown>), [colId]: next })
+    onUpdateRow(row.id, { [colId]: next })
   }
 
   function addColumn(name: string) {
@@ -350,10 +352,15 @@ export function TableView({ schema, onUpdateRow, onDeleteRow, onAddRow, onUpdate
     const newIndex = sorted.findIndex((r) => r.id === over.id)
     if (oldIndex === -1 || newIndex === -1) return
     // Only the dragged row's position needs to change — a fractional value
-    // between its new neighbors keeps every other row untouched.
+    // between its new neighbors keeps every other row untouched. If that gap
+    // has been halved past float64 precision (e.g. many drops onto the same
+    // slot over time), resolveInsertPosition instead renumbers every sibling
+    // with fresh integer gaps — persist those too, not just the moved row.
     const reordered = arrayMove(sorted, oldIndex, newIndex)
     const movedIndex = reordered.findIndex((r) => r.id === active.id)
-    const position = positionBetween(reordered[movedIndex - 1]?.position, reordered[movedIndex + 1]?.position)
+    const siblings = reordered.filter((_, i) => i !== movedIndex).map((r) => ({ id: r.id, position: r.position }))
+    const { position, rebalanced } = resolveInsertPosition(siblings, movedIndex)
+    rebalanced?.forEach((s) => onReorderRow(s.id, s.position))
     onReorderRow(active.id as string, position)
   }
 
