@@ -30,6 +30,12 @@ const TYPE_ICONS: Record<ColumnType, React.ReactNode> = {
 
 const ALL_TYPES: ColumnType[] = ['text', 'number', 'checkbox', 'date', 'select', 'multi_select', 'relation', 'rollup']
 
+// Source types whose existing values can be turned into select options
+// rather than wiped on conversion — i.e. types with one scalar value per
+// cell that stringifies to a meaningful label. multi_select/relation/rollup
+// are excluded: their values are arrays or derived, not a single label.
+const SELECT_CONVERTIBLE_SOURCE_TYPES: ColumnType[] = ['text', 'number', 'checkbox', 'date']
+
 const ROLLUP_OPS: RollupOperation[] = ['count', 'sum', 'avg', 'min', 'max']
 
 interface Props {
@@ -69,8 +75,20 @@ export function SchemaBuilder({ schema, onUpdate, onUpdateRow, onClose }: Props)
   // multi_select value, which every view expects to be an array) — clear
   // them rather than leaving stale, wrongly-shaped data sitting around that
   // could crash a view or silently look consistent when it isn't.
+  //
+  // Converting a scalar column (text/number/checkbox/date) to select is the
+  // one case where the old values ARE meaningful as a shape for the new
+  // type — a string is already a valid select value — so instead of wiping,
+  // we turn the distinct existing values into options and rewrite each cell
+  // to point at its (normalized) option.
   function changeColumnType(col: Column, type: ColumnType) {
     if (type === col.type) return
+
+    if (type === 'select' && SELECT_CONVERTIBLE_SOURCE_TYPES.includes(col.type)) {
+      convertColumnToSelect(col)
+      return
+    }
+
     updateColumn(col.id, {
       type,
       options: undefined,
@@ -87,6 +105,44 @@ export function SchemaBuilder({ schema, onUpdate, onUpdateRow, onClose }: Props)
       // treats null the same as "absent" everywhere else in the database views.
       onUpdateRow(row.id, { [col.id]: null })
     }
+  }
+
+  // Renders a scalar cell value the way it would read as a select option
+  // label. Returns null for values with no meaningful label (empty/blank).
+  function toOptionLabel(col: Column, raw: unknown): string | null {
+    if (raw === undefined || raw === null) return null
+    if (col.type === 'checkbox') return raw ? 'Yes' : 'No'
+    const str = String(raw).trim()
+    return str === '' ? null : str
+  }
+
+  function convertColumnToSelect(col: Column) {
+    // Options are deduped case/whitespace-insensitively (so "Done" and
+    // "done " collapse into one option) while keeping the first-seen
+    // casing as the canonical, displayed option value.
+    const canonicalByKey = new Map<string, string>()
+    const updates: { rowId: string; value: string | null }[] = []
+    for (const row of schema.rows) {
+      const raw = row.properties[col.id]
+      const label = toOptionLabel(col, raw)
+      if (label === null) {
+        if (raw !== undefined) updates.push({ rowId: row.id, value: null })
+        continue
+      }
+      const key = label.toLowerCase()
+      if (!canonicalByKey.has(key)) canonicalByKey.set(key, label)
+      updates.push({ rowId: row.id, value: canonicalByKey.get(key)! })
+    }
+
+    updateColumn(col.id, {
+      type: 'select',
+      options: Array.from(canonicalByKey.values()),
+      targetPageId: undefined,
+      relationColId: undefined,
+      targetColId: undefined,
+      operation: undefined,
+    })
+    for (const { rowId, value } of updates) onUpdateRow(rowId, { [col.id]: value })
   }
 
   function addOption(col: Column, name: string) {
