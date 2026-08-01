@@ -179,7 +179,10 @@ export function TableView({ schema, onUpdateRow, onDeleteRow, onAddRow, onUpdate
     if (!col) return
     const value = col.type === 'number' ? (parseFloat(raw) || 0) : raw
     onUpdateRow(row.id, { ...(row.properties as Record<string, unknown>), [colId]: value })
-    setEditing(null)
+    // Only clear if this is still the active cell — Tab/Enter navigation commits
+    // and immediately re-targets `editing` to the next cell in the same handler,
+    // and the outgoing input's native blur (fired on unmount) must not clobber that.
+    setEditing((cur) => (cur?.rowId === row.id && cur?.colId === colId ? null : cur))
   }
 
   function toggleCheck(row: DbRow, colId: string) {
@@ -335,10 +338,11 @@ export function TableView({ schema, onUpdateRow, onDeleteRow, onAddRow, onUpdate
             >
               <SortableContext items={sorted.map((r) => r.id)} strategy={verticalListSortingStrategy}>
                 <tbody>
-                  {sorted.map((row) => (
+                  {sorted.map((row, i) => (
                     <SortableRow
                       key={row.id}
                       row={row}
+                      nextRowId={sorted[i + 1]?.id}
                       visibleColumns={visibleColumns}
                       colMap={colMap}
                       lockFirstColumn={lockFirstColumn}
@@ -436,6 +440,7 @@ function SortableColumnHeader({ col, isFirst, lockFirstColumn, sortable, sortSta
 
 interface SortableRowProps {
   row: DbRow
+  nextRowId?: string
   visibleColumns: Column[]
   colMap: Map<string, Column>
   lockFirstColumn: boolean
@@ -458,7 +463,7 @@ interface SortableRowProps {
 }
 
 function SortableRow({
-  row, visibleColumns, colMap, lockFirstColumn, sortable, editing, selectOpen, relationOpen, inputRef,
+  row, nextRowId, visibleColumns, colMap, lockFirstColumn, sortable, editing, selectOpen, relationOpen, inputRef,
   onStartEdit, onCommitEdit, onCancelEdit, onToggleCheck, onSetSelect, onToggleMulti, onClearMulti,
   onToggleRelation, onCloseSelect, onCloseRelation, onDeleteRow,
 }: SortableRowProps) {
@@ -528,8 +533,17 @@ function SortableRow({
               defaultValue={displayValue(row, col)}
               onBlur={(e) => onCommitEdit(row, col.id, e.target.value)}
               onKeyDown={(e) => {
-                if (e.key === 'Enter') (e.target as HTMLInputElement).blur()
-                if (e.key === 'Escape') onCancelEdit()
+                if (e.key === 'Enter') {
+                  e.preventDefault()
+                  onCommitEdit(row, col.id, (e.target as HTMLInputElement).value)
+                  if (nextRowId) onStartEdit(nextRowId, col)
+                } else if (e.key === 'Tab' && !e.shiftKey && visibleColumns[i + 1]) {
+                  e.preventDefault()
+                  onCommitEdit(row, col.id, (e.target as HTMLInputElement).value)
+                  onStartEdit(row.id, visibleColumns[i + 1])
+                } else if (e.key === 'Escape') {
+                  onCancelEdit()
+                }
               }}
               onClick={(e) => e.stopPropagation()}
               className="w-full outline-none bg-transparent"
