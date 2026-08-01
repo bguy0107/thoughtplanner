@@ -14,12 +14,16 @@ COPY . .
 RUN node_modules/.bin/prisma generate && node_modules/.bin/tsc
 
 FROM node:22-alpine AS production
-RUN corepack enable && corepack prepare pnpm@latest --activate
 WORKDIR /app
-COPY package.json ./
-RUN pnpm install --ignore-scripts --prod
+# Reuse the builder's node_modules wholesale rather than a separate `pnpm
+# install --prod` — pnpm's isolated store keeps the generated Prisma client
+# nested under node_modules/.pnpm/@prisma+client@.../node_modules/.prisma
+# (not the top-level node_modules/.prisma a flat npm/yarn install would have),
+# so a fresh prod-only install has nothing to run `prisma generate` against
+# and no stable path to copy the generated client back in from.
+COPY --from=builder /app/node_modules ./node_modules
 COPY --from=builder /app/dist ./dist
-COPY --from=builder /app/node_modules/.prisma ./node_modules/.prisma
+COPY package.json ./
 COPY prisma ./prisma
 USER node
 CMD ["node", "dist/index.js"]
