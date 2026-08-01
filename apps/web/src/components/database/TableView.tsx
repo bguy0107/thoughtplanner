@@ -124,8 +124,12 @@ export function TableView({ schema, onUpdateRow, onDeleteRow, onAddRow, onUpdate
   const colMap = useMemo(() => new Map(schema.columns.map((c) => [c.id, c])), [schema.columns])
 
   const visibleColumns = useMemo(
-    () => schema.columns.filter((col) => col.name.toLowerCase().includes(columnFilter.toLowerCase())),
-    [schema.columns, columnFilter],
+    () =>
+      schema.columns.filter((col, i) => {
+        if (lockFirstColumn && i === 0) return true
+        return col.name.toLowerCase().includes(columnFilter.toLowerCase())
+      }),
+    [schema.columns, columnFilter, lockFirstColumn],
   )
 
   const filtered = useMemo(
