@@ -21,6 +21,7 @@ import { CSS } from '@dnd-kit/utilities'
 import { positionBetween } from '@/lib/position'
 import { cn } from '@/lib/utils'
 import { api, type Column, type ColumnType, type DbRow, type DbSchema, type RelatedRow } from '@/lib/api'
+import { PromptModal } from '@/components/ui/PromptModal'
 
 const TYPE_ICONS: Record<ColumnType, React.ReactNode> = {
   text: <AlignLeft size={12} />,
@@ -99,6 +100,7 @@ export function TableView({ schema, onUpdateRow, onDeleteRow, onAddRow, onUpdate
   const [columnFilter, setColumnFilter] = useState('')
   const [lockHeaders, setLockHeaders] = useState(true)
   const [lockFirstColumn, setLockFirstColumn] = useState(false)
+  const [addColumnOpen, setAddColumnOpen] = useState(false)
   const inputRef = useRef<HTMLInputElement>(null)
 
   const sensors = useSensors(
@@ -212,10 +214,9 @@ export function TableView({ schema, onUpdateRow, onDeleteRow, onAddRow, onUpdate
     onUpdateRow(row.id, { ...(row.properties as Record<string, unknown>), [colId]: next })
   }
 
-  function addColumn() {
-    const name = prompt('Column name:')
-    if (!name?.trim()) return
-    onUpdateSchema([...schema.columns, { id: crypto.randomUUID(), name: name.trim(), type: 'text' }])
+  function addColumn(name: string) {
+    onUpdateSchema([...schema.columns, { id: crypto.randomUUID(), name, type: 'text' }])
+    setAddColumnOpen(false)
   }
 
   function handleColumnDragEnd(event: DragEndEvent) {
@@ -320,7 +321,7 @@ export function TableView({ schema, onUpdateRow, onDeleteRow, onAddRow, onUpdate
                 </DndContext>
                 <th className="px-2 py-2 w-10 border-r border-gray-200 dark:border-gray-700">
                   <button
-                    onClick={addColumn}
+                    onClick={() => setAddColumnOpen(true)}
                     title="Add column"
                     className="p-1 rounded hover:bg-gray-200 dark:hover:bg-gray-700 text-gray-400 dark:text-gray-500 hover:text-gray-600 dark:hover:text-gray-300 transition-colors"
                   >
@@ -378,6 +379,15 @@ export function TableView({ schema, onUpdateRow, onDeleteRow, onAddRow, onUpdate
           Add row
         </button>
       </div>
+
+      {addColumnOpen && (
+        <PromptModal
+          title="New column"
+          placeholder="Column name"
+          onConfirm={addColumn}
+          onCancel={() => setAddColumnOpen(false)}
+        />
+      )}
     </div>
   )
 }

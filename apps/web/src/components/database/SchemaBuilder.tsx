@@ -3,6 +3,8 @@
 import { useEffect, useState } from 'react'
 import { AlignLeft, Calendar, CheckSquare, ChevronDown, ChevronRight, Hash, Link, Plus, Tags, Trash2, X, RefreshCw } from 'lucide-react'
 import { api, type Column, type ColumnType, type DbSchema, type PageSummary, type RollupOperation } from '@/lib/api'
+import { ConfirmModal } from '@/components/ui/ConfirmModal'
+import { PromptModal } from '@/components/ui/PromptModal'
 
 const TYPE_LABELS: Record<ColumnType, string> = {
   text: 'Text',
@@ -40,6 +42,8 @@ interface Props {
 export function SchemaBuilder({ schema, onUpdate, onUpdateRow, onClose }: Props) {
   const [expanded, setExpanded] = useState<string | null>(null)
   const [dbPages, setDbPages] = useState<PageSummary[]>([])
+  const [deleteColumnId, setDeleteColumnId] = useState<string | null>(null)
+  const [addOptionFor, setAddOptionFor] = useState<string | null>(null)
 
   useEffect(() => {
     api.pages.list().then((pages) => setDbPages(pages.filter((p) => p.isDatabase)))
@@ -50,8 +54,8 @@ export function SchemaBuilder({ schema, onUpdate, onUpdateRow, onClose }: Props)
   }
 
   function deleteColumn(id: string) {
-    if (!confirm('Delete this column? Row data for it will be lost.')) return
     onUpdate(schema.columns.filter((c) => c.id !== id))
+    setDeleteColumnId(null)
   }
 
   function addColumn() {
@@ -82,10 +86,9 @@ export function SchemaBuilder({ schema, onUpdate, onUpdateRow, onClose }: Props)
     }
   }
 
-  function addOption(col: Column) {
-    const name = prompt('Option name:')
-    if (!name?.trim()) return
-    updateColumn(col.id, { options: [...(col.options ?? []), name.trim()] })
+  function addOption(col: Column, name: string) {
+    updateColumn(col.id, { options: [...(col.options ?? []), name] })
+    setAddOptionFor(null)
   }
 
   // Removing an option must also clear it from any row still holding that
@@ -104,6 +107,7 @@ export function SchemaBuilder({ schema, onUpdate, onUpdateRow, onClose }: Props)
   }
 
   const relationCols = schema.columns.filter((c) => c.type === 'relation')
+  const addOptionCol = schema.columns.find((c) => c.id === addOptionFor)
 
   return (
     <aside className="w-72 flex-shrink-0 border-l border-gray-200 dark:border-gray-800 bg-[#f7f7f5] dark:bg-sidebar-dark-bg flex flex-col h-full overflow-hidden">
@@ -142,7 +146,7 @@ export function SchemaBuilder({ schema, onUpdate, onUpdateRow, onClose }: Props)
               />
               {idx > 0 && (
                 <button
-                  onClick={() => deleteColumn(col.id)}
+                  onClick={() => setDeleteColumnId(col.id)}
                   className="p-0.5 rounded hover:bg-red-50 dark:hover:bg-red-950/50 text-gray-300 dark:text-gray-600 hover:text-red-500 transition-colors flex-shrink-0"
                 >
                   <Trash2 size={13} />
@@ -193,7 +197,7 @@ export function SchemaBuilder({ schema, onUpdate, onUpdateRow, onClose }: Props)
                       ))}
                     </div>
                     <button
-                      onClick={() => addOption(col)}
+                      onClick={() => setAddOptionFor(col.id)}
                       className="mt-2 flex items-center gap-1 text-xs text-blue-600 dark:text-blue-400 hover:text-blue-700 dark:hover:text-blue-300"
                     >
                       <Plus size={12} />
@@ -280,6 +284,25 @@ export function SchemaBuilder({ schema, onUpdate, onUpdateRow, onClose }: Props)
           Add property
         </button>
       </div>
+
+      {deleteColumnId && (
+        <ConfirmModal
+          title="Delete column?"
+          message="Row data for this column will be lost."
+          confirmLabel="Delete"
+          onConfirm={() => deleteColumn(deleteColumnId)}
+          onCancel={() => setDeleteColumnId(null)}
+        />
+      )}
+
+      {addOptionCol && (
+        <PromptModal
+          title="New option"
+          placeholder="Option name"
+          onConfirm={(name) => addOption(addOptionCol, name)}
+          onCancel={() => setAddOptionFor(null)}
+        />
+      )}
     </aside>
   )
 }

@@ -3,11 +3,13 @@
 import { useEffect, useState } from 'react'
 import { RotateCcw, Trash2, Archive } from 'lucide-react'
 import { api, type AdminPage } from '@/lib/api'
+import { ConfirmModal } from '@/components/ui/ConfirmModal'
 
 export function PagesPanel() {
   const [pages, setPages] = useState<AdminPage[]>([])
   const [loading, setLoading] = useState(true)
   const [showArchivedOnly, setShowArchivedOnly] = useState(false)
+  const [purgeTarget, setPurgeTarget] = useState<{ id: string; title: string } | null>(null)
 
   async function load() {
     setPages(await api.admin.pages.list())
@@ -22,8 +24,8 @@ export function PagesPanel() {
     await load()
   }
 
-  async function handlePurge(id: string, title: string) {
-    if (!confirm(`Permanently delete "${title}" and all its sub-pages? This cannot be undone.`)) return
+  async function handlePurge(id: string) {
+    setPurgeTarget(null)
     await api.admin.pages.purge(id)
     await load()
   }
@@ -87,7 +89,7 @@ export function PagesPanel() {
                     <RotateCcw size={14} />
                   </button>
                   <button
-                    onClick={() => handlePurge(page.id, page.title)}
+                    onClick={() => setPurgeTarget({ id: page.id, title: page.title })}
                     className="p-1.5 text-gray-400 dark:text-gray-500 hover:text-red-500"
                     title="Permanently delete"
                   >
@@ -98,6 +100,16 @@ export function PagesPanel() {
             </div>
           ))}
         </div>
+      )}
+
+      {purgeTarget && (
+        <ConfirmModal
+          title="Permanently delete page?"
+          message={`Permanently delete "${purgeTarget.title}" and all its sub-pages? This cannot be undone.`}
+          confirmLabel="Delete"
+          onConfirm={() => handlePurge(purgeTarget.id)}
+          onCancel={() => setPurgeTarget(null)}
+        />
       )}
     </div>
   )

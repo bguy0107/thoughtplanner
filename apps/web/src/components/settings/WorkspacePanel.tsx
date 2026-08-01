@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { api } from '@/lib/api'
 import { useWorkspaceStore } from '@/store/workspace'
+import { ConfirmModal } from '@/components/ui/ConfirmModal'
 
 export function WorkspacePanel() {
   const router = useRouter()
@@ -16,6 +17,7 @@ export function WorkspacePanel() {
   const [saved, setSaved] = useState(false)
   const [deleting, setDeleting] = useState(false)
   const [deleteError, setDeleteError] = useState<string | null>(null)
+  const [confirmOpen, setConfirmOpen] = useState(false)
 
   useEffect(() => {
     setName(current?.name ?? '')
@@ -38,7 +40,7 @@ export function WorkspacePanel() {
 
   async function handleDelete() {
     if (!currentWorkspaceId) return
-    if (!confirm(`Delete "${current?.name}"? This cannot be undone.`)) return
+    setConfirmOpen(false)
     setDeleting(true)
     setDeleteError(null)
     try {
@@ -102,13 +104,23 @@ export function WorkspacePanel() {
           </p>
           {deleteError && <p className="text-sm text-red-600 dark:text-red-400 mb-2">{deleteError}</p>}
           <button
-            onClick={handleDelete}
+            onClick={() => setConfirmOpen(true)}
             disabled={deleting}
             className="px-3 py-1.5 text-sm border border-red-300 dark:border-red-800 text-red-600 dark:text-red-400 rounded hover:bg-red-50 dark:hover:bg-red-950/30 disabled:opacity-40 transition-colors"
           >
             Delete workspace
           </button>
         </section>
+      )}
+
+      {confirmOpen && (
+        <ConfirmModal
+          title="Delete workspace?"
+          message={`Delete "${current?.name}"? This cannot be undone.`}
+          confirmLabel="Delete"
+          onConfirm={handleDelete}
+          onCancel={() => setConfirmOpen(false)}
+        />
       )}
     </div>
   )
