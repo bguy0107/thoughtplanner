@@ -4,8 +4,12 @@ interface Socket {
 }
 
 export type WSMessage =
-  | { type: 'page:content'; pageId: string; content: unknown }
-  | { type: 'page:meta'; pageId: string; title?: string; icon?: string | null }
+  | { type: 'page:content'; pageId: string; content: unknown; updatedAt: string; updatedBy: { id: string; name: string } }
+  | { type: 'page:meta'; pageId: string; title?: string; icon?: string | null; updatedAt?: string; updatedBy?: { id: string; name: string } }
+  // Sent back to the saving client only (wsBroadcast excludes the sender from
+  // page:content), so their own "last edited" label updates without echoing
+  // content back into their editor and disturbing cursor position.
+  | { type: 'page:saved'; pageId: string; updatedAt: string; updatedBy: { id: string; name: string } }
 
 const rooms = new Map<string, Set<Socket>>()
 

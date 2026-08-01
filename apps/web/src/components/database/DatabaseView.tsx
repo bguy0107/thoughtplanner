@@ -9,6 +9,7 @@ import { GalleryView } from './GalleryView'
 import { CalendarView } from './CalendarView'
 import { SchemaBuilder } from './SchemaBuilder'
 import { SpreadsheetImportModal } from '@/components/SpreadsheetImportModal'
+import { LastEditedLabel } from '@/components/LastEditedLabel'
 
 type ViewMode = 'table' | 'board' | 'gallery' | 'calendar'
 
@@ -22,37 +23,54 @@ export function DatabaseView({ page, onTitleChange }: Props) {
   const [view, setView] = useState<ViewMode>('table')
   const [showSchema, setShowSchema] = useState(false)
   const [showImport, setShowImport] = useState(false)
+  const [meta, setMeta] = useState({ updatedAt: page.updatedAt, updatedBy: page.updatedBy })
 
   useEffect(() => {
     api.databases.get(page.id).then(setSchema)
   }, [page.id])
 
+  // The page prop only reflects title/icon edits made from this view (see
+  // onTitleChange below) — row/schema edits bump the page on the server but
+  // don't flow back through props, so those are synced via refreshMeta.
+  useEffect(() => {
+    setMeta({ updatedAt: page.updatedAt, updatedBy: page.updatedBy })
+  }, [page.updatedAt, page.updatedBy])
+
+  const refreshMeta = useCallback(() => {
+    api.pages.get(page.id).then((p) => setMeta({ updatedAt: p.updatedAt, updatedBy: p.updatedBy }))
+  }, [page.id])
+
   const handleImported = useCallback(() => {
     setShowImport(false)
     api.databases.get(page.id).then(setSchema)
-  }, [page.id])
+    refreshMeta()
+  }, [page.id, refreshMeta])
 
   const handleUpdateSchema = useCallback(async (columns: Column[]) => {
     const updated = await api.databases.updateSchema(page.id, columns)
     setSchema((s) => s ? { ...s, columns: updated.columns } : s)
-  }, [page.id])
+    refreshMeta()
+  }, [page.id, refreshMeta])
 
   const handleAddRow = useCallback(async (properties?: Record<string, unknown>) => {
     const row = await api.databases.createRow(page.id, properties)
     setSchema((s) => s ? { ...s, rows: [...s.rows, row] } : s)
-  }, [page.id])
+    refreshMeta()
+  }, [page.id, refreshMeta])
 
   const handleUpdateRow = useCallback(async (rowId: string, properties: Record<string, unknown>) => {
     await api.databases.updateRow(rowId, properties)
     setSchema((s) => s
       ? { ...s, rows: s.rows.map((r) => r.id === rowId ? { ...r, properties } : r) }
       : s)
-  }, [])
+    refreshMeta()
+  }, [refreshMeta])
 
   const handleDeleteRow = useCallback(async (rowId: string) => {
     await api.databases.deleteRow(rowId)
     setSchema((s) => s ? { ...s, rows: s.rows.filter((r) => r.id !== rowId) } : s)
-  }, [])
+    refreshMeta()
+  }, [refreshMeta])
 
   const handleReorderRow = useCallback(async (rowId: string, position: number) => {
     setSchema((s) => {
@@ -82,16 +100,19 @@ export function DatabaseView({ page, onTitleChange }: Props) {
       <div className="px-8 pt-10 pb-0 flex-shrink-0">
         <div className="max-w-5xl mx-auto">
           {page.icon && <div className="text-5xl mb-3">{page.icon}</div>}
-          <input
-            key={page.id}
-            defaultValue={page.title}
-            placeholder="Untitled"
-            onBlur={(e) => onTitleChange(e.target.value)}
-            onKeyDown={(e) => {
-              if (e.key === 'Enter') (e.target as HTMLInputElement).blur()
-            }}
-            className="w-full text-4xl font-bold text-gray-900 dark:text-gray-100 outline-none placeholder-gray-300 dark:placeholder-gray-600 mb-4 bg-transparent"
-          />
+          <div className="flex items-end gap-3 mb-4">
+            <input
+              key={page.id}
+              defaultValue={page.title}
+              placeholder="Untitled"
+              onBlur={(e) => onTitleChange(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') (e.target as HTMLInputElement).blur()
+              }}
+              className="flex-1 min-w-0 text-4xl font-bold text-gray-900 dark:text-gray-100 outline-none placeholder-gray-300 dark:placeholder-gray-600 bg-transparent"
+            />
+            <LastEditedLabel updatedAt={meta.updatedAt} updatedBy={meta.updatedBy} />
+          </div>
 
           {/* View tabs + properties toggle */}
           <div className="flex items-center gap-0.5 border-b border-gray-200 dark:border-gray-800 pb-0">

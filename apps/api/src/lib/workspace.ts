@@ -52,3 +52,10 @@ export async function requirePageAccess(
   if (!access.ok) return access
   return { ok: true, workspaceId: page.workspaceId, membership: access.membership }
 }
+
+// Bumps a page's updatedAt/updatedBy without touching its content — used when
+// an edit to something a page owns (database rows, schema columns) should
+// count as an edit to the page itself, e.g. for a "last modified" display.
+export function touchPage(pageId: string, userId: string) {
+  return prisma.page.update({ where: { id: pageId }, data: { updatedById: userId } })
+}

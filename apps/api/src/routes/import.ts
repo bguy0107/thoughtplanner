@@ -6,7 +6,7 @@ import Papa from 'papaparse'
 import * as XLSX from 'xlsx'
 import { prisma } from '../lib/prisma.js'
 import { auth } from '../lib/auth.js'
-import { requirePageAccess, requireWorkspaceMember } from '../lib/workspace.js'
+import { requirePageAccess, requireWorkspaceMember, touchPage } from '../lib/workspace.js'
 
 interface SpreadsheetColumn {
   id: string
@@ -347,6 +347,7 @@ export async function importRoutes(app: FastifyInstance) {
         return { pageId: targetPageId, schemaId: schema.id, properties: properties as Prisma.InputJsonValue }
       })
       await prisma.databaseRow.createMany({ data: rowsToInsert })
+      await touchPage(targetPageId, session.user.id)
 
       return { pageId: targetPageId, rowsCreated: rows.length, columnsAdded }
     }

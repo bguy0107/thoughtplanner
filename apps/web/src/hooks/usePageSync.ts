@@ -7,7 +7,12 @@ import { api } from '@/lib/api'
 const WS_BASE = (process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:3001').replace(/^http/, 'ws')
 const MAX_RECONNECT_DELAY_MS = 15000
 
-export type PageMeta = { title?: string; icon?: string | null }
+export type PageMeta = {
+  title?: string
+  icon?: string | null
+  updatedAt?: string
+  updatedBy?: { id: string; name: string }
+}
 
 export function usePageSync(
   pageId: string,
@@ -61,8 +66,11 @@ export function usePageSync(
             suppressRef.current = true
             editorRef.current.commands.setContent(msg.content as object, false)
             suppressRef.current = false
+            onMetaRef.current?.({ updatedAt: msg.updatedAt, updatedBy: msg.updatedBy })
           } else if (msg.type === 'page:meta' && msg.pageId === pageId) {
-            onMetaRef.current?.({ title: msg.title, icon: msg.icon })
+            onMetaRef.current?.({ title: msg.title, icon: msg.icon, updatedAt: msg.updatedAt, updatedBy: msg.updatedBy })
+          } else if (msg.type === 'page:saved' && msg.pageId === pageId) {
+            onMetaRef.current?.({ updatedAt: msg.updatedAt, updatedBy: msg.updatedBy })
           }
         } catch {
           // ignore

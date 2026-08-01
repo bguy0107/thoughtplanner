@@ -3,7 +3,7 @@ import type { Prisma } from '@prisma/client'
 import { z } from 'zod'
 import { prisma } from '../lib/prisma.js'
 import { auth } from '../lib/auth.js'
-import { requirePageAccess } from '../lib/workspace.js'
+import { requirePageAccess, touchPage } from '../lib/workspace.js'
 
 async function getSession(req: FastifyRequest) {
   return auth.api.getSession({ headers: req.headers as unknown as Headers })
@@ -193,6 +193,7 @@ export async function databaseRoutes(app: FastifyInstance) {
       where: { pageId: req.params.pageId },
       data: { columns: body.data.columns },
     })
+    await touchPage(req.params.pageId, session.user.id)
 
     return schema
   })
@@ -226,6 +227,7 @@ export async function databaseRoutes(app: FastifyInstance) {
         position: last ? last.position + 1 : 0,
       },
     })
+    await touchPage(req.params.pageId, session.user.id)
 
     return reply.status(201).send(row)
   })
@@ -256,6 +258,9 @@ export async function databaseRoutes(app: FastifyInstance) {
         ...(position !== undefined ? { position } : {}),
       },
     })
+    // A pure position change is a drag-to-reorder, not an edit — don't bump
+    // "last modified" for that, only for actual property changes.
+    if (properties !== undefined) await touchPage(existing.pageId, session.user.id)
 
     return row
   })
@@ -275,6 +280,7 @@ export async function databaseRoutes(app: FastifyInstance) {
     if (!access.ok) return reply.status(access.status).send({ error: access.error })
 
     await prisma.databaseRow.delete({ where: { id: req.params.rowId } })
+    await touchPage(existing.pageId, session.user.id)
     return reply.status(204).send()
   })
 }

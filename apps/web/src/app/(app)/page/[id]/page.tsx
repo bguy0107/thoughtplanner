@@ -8,6 +8,7 @@ import { useSidebarStore } from '@/store/sidebar'
 import { Editor, type EditorHandle } from '@/components/editor/Editor'
 import { DatabaseView } from '@/components/database/DatabaseView'
 import { IconPicker } from '@/components/IconPicker'
+import { LastEditedLabel } from '@/components/LastEditedLabel'
 
 export default function PageView({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params)
@@ -30,31 +31,37 @@ export default function PageView({ params }: { params: Promise<{ id: string }> }
       .finally(() => setLoading(false))
   }, [id])
 
+  // PATCH responses always carry the fresh updatedAt/updatedBy — merge them in
+  // so the "last edited" label reflects the save without a separate refetch.
+  const applyMeta = useCallback((updated: Pick<Page, 'updatedAt' | 'updatedBy'>) => {
+    setPage((p) => p ? { ...p, updatedAt: updated.updatedAt, updatedBy: updated.updatedBy } : p)
+  }, [])
+
   const handleTitleChange = useCallback(
     async (title: string) => {
       if (!page) return
       setPage((p) => p ? { ...p, title } : p)
       updatePage(id, { title })
-      await api.pages.update(id, { title })
+      applyMeta(await api.pages.update(id, { title }))
     },
-    [id, page, updatePage],
+    [id, page, updatePage, applyMeta],
   )
 
   const handleContentChange = useCallback(
     async (content: unknown) => {
       if (!page) return
-      await api.pages.update(id, { content })
+      applyMeta(await api.pages.update(id, { content }))
     },
-    [id, page],
+    [id, page, applyMeta],
   )
 
   const handleIconChange = useCallback(
     async (icon: string | null) => {
       setPage((p) => p ? { ...p, icon } : p)
       updatePage(id, { icon })
-      await api.pages.update(id, { icon })
+      applyMeta(await api.pages.update(id, { icon }))
     },
-    [id, updatePage],
+    [id, updatePage, applyMeta],
   )
 
   const handleCoverUpload = useCallback(
@@ -64,19 +71,25 @@ export default function PageView({ params }: { params: Promise<{ id: string }> }
       e.target.value = ''
       const uploaded = await api.files.upload(id, file)
       setPage((p) => p ? { ...p, coverImage: uploaded.url } : p)
-      await api.pages.update(id, { coverImage: uploaded.url })
+      applyMeta(await api.pages.update(id, { coverImage: uploaded.url }))
     },
-    [id],
+    [id, applyMeta],
   )
 
   const handleRemoveCover = useCallback(async () => {
     setPage((p) => p ? { ...p, coverImage: null } : p)
-    await api.pages.update(id, { coverImage: null })
-  }, [id])
+    applyMeta(await api.pages.update(id, { coverImage: null }))
+  }, [id, applyMeta])
 
   const handleRemoteMeta = useCallback(
-    (meta: { title?: string; icon?: string | null }) => {
-      setPage((p) => (p ? { ...p, ...(meta.title !== undefined ? { title: meta.title } : {}), ...(meta.icon !== undefined ? { icon: meta.icon } : {}) } : p))
+    (meta: { title?: string; icon?: string | null; updatedAt?: string; updatedBy?: { id: string; name: string } }) => {
+      setPage((p) => (p ? {
+        ...p,
+        ...(meta.title !== undefined ? { title: meta.title } : {}),
+        ...(meta.icon !== undefined ? { icon: meta.icon } : {}),
+        ...(meta.updatedAt !== undefined ? { updatedAt: meta.updatedAt } : {}),
+        ...(meta.updatedBy !== undefined ? { updatedBy: meta.updatedBy } : {}),
+      } : p))
       updatePage(id, meta)
     },
     [id, updatePage],
@@ -86,8 +99,8 @@ export default function PageView({ params }: { params: Promise<{ id: string }> }
     if (!page) return
     const isPublic = !page.isPublic
     setPage((p) => p ? { ...p, isPublic } : p)
-    await api.pages.update(id, { isPublic })
-  }, [id, page])
+    applyMeta(await api.pages.update(id, { isPublic }))
+  }, [id, page, applyMeta])
 
   const handleCopyShareLink = useCallback(() => {
     const url = `${window.location.origin}/share/${id}`
@@ -215,19 +228,22 @@ export default function PageView({ params }: { params: Promise<{ id: string }> }
         </div>
 
         {/* Title */}
-        <input
-          key={`title-${page.id}`}
-          defaultValue={page.title}
-          placeholder="Untitled"
-          onBlur={(e) => handleTitleChange(e.target.value)}
-          onKeyDown={(e) => {
-            if (e.key === 'Enter') {
-              e.preventDefault()
-              ;(e.target as HTMLInputElement).blur()
-            }
-          }}
-          className="w-full text-4xl font-bold text-gray-900 dark:text-gray-100 outline-none placeholder-gray-300 dark:placeholder-gray-600 mb-6 bg-transparent"
-        />
+        <div className="flex items-end gap-3 mb-6">
+          <input
+            key={`title-${page.id}`}
+            defaultValue={page.title}
+            placeholder="Untitled"
+            onBlur={(e) => handleTitleChange(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter') {
+                e.preventDefault()
+                ;(e.target as HTMLInputElement).blur()
+              }
+            }}
+            className="flex-1 min-w-0 text-4xl font-bold text-gray-900 dark:text-gray-100 outline-none placeholder-gray-300 dark:placeholder-gray-600 bg-transparent"
+          />
+          <LastEditedLabel updatedAt={page.updatedAt} updatedBy={page.updatedBy} />
+        </div>
 
         <Editor
           ref={editorRef}

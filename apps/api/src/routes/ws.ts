@@ -52,11 +52,15 @@ export async function wsRoutes(app: FastifyInstance) {
               const membership = await getMembership(session.user.id, workspaceId)
               if (!membership || !hasWorkspaceRole(membership.role, 'EDITOR')) return
 
-              await prisma.page.update({
+              const updated = await prisma.page.update({
                 where: { id: pageId },
                 data: { content: msg.content, updatedById: session.user.id },
+                select: { updatedAt: true },
               })
-              wsBroadcast(pageId, { type: 'page:content', pageId, content: msg.content }, socket)
+              const updatedAt = updated.updatedAt.toISOString()
+              const updatedBy = { id: session.user.id, name: session.user.name }
+              wsBroadcast(pageId, { type: 'page:content', pageId, content: msg.content, updatedAt, updatedBy }, socket)
+              socket.send(JSON.stringify({ type: 'page:saved', pageId, updatedAt, updatedBy }))
             }
           } catch {
             // ignore malformed messages

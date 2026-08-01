@@ -82,7 +82,7 @@ export async function pageRoutes(app: FastifyInstance) {
 
     const page = await prisma.page.findUnique({
       where: { id: req.params.id },
-      include: { files: true },
+      include: { files: true, updatedBy: { select: { id: true, name: true } } },
     })
 
     if (!page) return reply.status(404).send({ error: 'Not found' })
@@ -198,7 +198,10 @@ export async function pageRoutes(app: FastifyInstance) {
           : {}),
         updatedById: session.user.id,
       },
+      include: { updatedBy: { select: { id: true, name: true } } },
     })
+    const updatedAt = page.updatedAt.toISOString()
+    const updatedBy = { id: page.updatedBy.id, name: page.updatedBy.name }
 
     if (body.data.title !== undefined || body.data.icon !== undefined) {
       wsBroadcast(req.params.id, {
@@ -206,6 +209,8 @@ export async function pageRoutes(app: FastifyInstance) {
         pageId: req.params.id,
         title: page.title,
         icon: page.icon,
+        updatedAt,
+        updatedBy,
       })
     }
 
@@ -214,7 +219,7 @@ export async function pageRoutes(app: FastifyInstance) {
     // when that socket is down — it must also broadcast, or a save made while
     // disconnected silently overwrites the page with no one else notified.
     if (content !== undefined) {
-      wsBroadcast(req.params.id, { type: 'page:content', pageId: req.params.id, content: page.content })
+      wsBroadcast(req.params.id, { type: 'page:content', pageId: req.params.id, content: page.content, updatedAt, updatedBy })
     }
 
     return page

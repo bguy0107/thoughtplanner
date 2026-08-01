@@ -54,6 +54,7 @@ export type Page = PageSummary & {
   isPublic: boolean
   createdById: string
   updatedById: string
+  updatedBy: { id: string; name: string }
   createdAt: string
   files: FileRecord[]
 }
