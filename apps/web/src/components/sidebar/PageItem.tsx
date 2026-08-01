@@ -121,18 +121,18 @@ export function PageItem({ page, depth, tree }: PageItemProps) {
           {hovered && (
             <span className="flex items-center gap-0.5 flex-shrink-0">
               <button
-                onClick={handleDelete}
-                className="p-0.5 rounded hover:bg-[#d9d8d6] dark:hover:bg-sidebar-dark-active text-gray-400 dark:text-sidebar-dark-muted hover:text-red-500"
-                title="Delete page"
-              >
-                <Trash2 size={13} />
-              </button>
-              <button
                 onClick={handleAddChild}
                 className="p-0.5 rounded hover:bg-[#d9d8d6] dark:hover:bg-sidebar-dark-active text-gray-400 dark:text-sidebar-dark-muted"
                 title="Add sub-page"
               >
                 <Plus size={13} />
+              </button>
+              <button
+                onClick={handleDelete}
+                className="p-0.5 rounded hover:bg-[#d9d8d6] dark:hover:bg-sidebar-dark-active text-gray-400 dark:text-sidebar-dark-muted hover:text-red-500"
+                title="Delete page"
+              >
+                <Trash2 size={13} />
               </button>
             </span>
           )}
