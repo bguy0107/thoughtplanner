@@ -29,7 +29,7 @@ Compose command on your home network or a VPS.
 ### Databases
 - Database-type pages with a configurable schema (text, number, checkbox, date, select, multi-select, relation, rollup)
 - Views: Table, Board/Kanban, Gallery, Calendar
-- Table view: sticky header, locked first column, per-column filter search, click-to-cycle sort, inline cell editing
+- Table view: sticky header, locked first column, per-column filter search, click-to-cycle sort, inline cell editing, Excel-style keyboard navigation (arrow keys/Tab to move between cells, Enter to edit, Space/Delete to toggle/clear)
 - Drag-to-reorder rows and columns
 - Relations between databases + server-computed rollups
 - Import from Excel/CSV spreadsheets

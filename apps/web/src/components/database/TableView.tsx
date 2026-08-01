@@ -93,6 +93,7 @@ interface Props {
 
 export function TableView({ schema, onUpdateRow, onDeleteRow, onAddRow, onUpdateSchema, onReorderRow }: Props) {
   const [editing, setEditing] = useState<EditCell>(null)
+  const [selected, setSelected] = useState<EditCell>(null)
   const [selectOpen, setSelectOpen] = useState<EditCell>(null)
   const [relationOpen, setRelationOpen] = useState<EditCell>(null)
   const [sort, setSort] = useState<SortState>(null)
@@ -102,6 +103,9 @@ export function TableView({ schema, onUpdateRow, onDeleteRow, onAddRow, onUpdate
   const [lockFirstColumn, setLockFirstColumn] = useState(false)
   const [addColumnOpen, setAddColumnOpen] = useState(false)
   const inputRef = useRef<HTMLInputElement>(null)
+  // Keyed by `${rowId}:${colId}` — lets arrow-key navigation move native DOM
+  // focus to an arbitrary cell without each SortableRow needing its own state.
+  const cellRefs = useRef(new Map<string, HTMLTableCellElement>())
 
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 6 } }),
@@ -163,6 +167,7 @@ export function TableView({ schema, onUpdateRow, onDeleteRow, onAddRow, onUpdate
   }
 
   function startEdit(rowId: string, col: Column) {
+    setSelected({ rowId, colId: col.id })
     if (col.type === 'checkbox') return
     if (col.type === 'rollup') return
     if (col.type === 'select' || col.type === 'multi_select') {
@@ -174,6 +179,112 @@ export function TableView({ schema, onUpdateRow, onDeleteRow, onAddRow, onUpdate
       return
     }
     setEditing({ rowId, colId: col.id })
+  }
+
+  function selectCell(rowId: string, colId: string) {
+    setSelected({ rowId, colId })
+  }
+
+  // Moves native focus to the target cell rather than just updating state —
+  // the target <td>'s onFocus is what actually updates `selected`, so this
+  // stays the single source of truth for "which cell is current."
+  function focusCell(rowId: string, colId: string) {
+    cellRefs.current.get(`${rowId}:${colId}`)?.focus()
+  }
+
+  // Steps one column left/right, wrapping to the first/last column of the
+  // next/previous row at a row boundary — null only past the very first or
+  // last cell of the whole table.
+  function stepHorizontal(rowIdx: number, colIdx: number, dir: 1 | -1): { row: DbRow; col: Column } | null {
+    let r = rowIdx
+    let c = colIdx + dir
+    if (c >= visibleColumns.length) { c = 0; r += 1 }
+    else if (c < 0) { c = visibleColumns.length - 1; r -= 1 }
+    if (r < 0 || r >= sorted.length) return null
+    return { row: sorted[r], col: visibleColumns[c] }
+  }
+
+  // Falls back to the origin cell when a move would go past the table edge —
+  // arrows/Tab clamp there rather than losing focus entirely.
+  function moveHorizontal(rowId: string, colId: string, dir: 1 | -1) {
+    const rowIdx = sorted.findIndex((r) => r.id === rowId)
+    const colIdx = visibleColumns.findIndex((c) => c.id === colId)
+    if (rowIdx === -1 || colIdx === -1) return
+    const next = stepHorizontal(rowIdx, colIdx, dir)
+    focusCell(next ? next.row.id : rowId, next ? next.col.id : colId)
+  }
+
+  // Vertical movement clamps at the top/bottom row — no wrap, unlike horizontal.
+  function moveVertical(rowId: string, colId: string, dir: 1 | -1) {
+    const rowIdx = sorted.findIndex((r) => r.id === rowId)
+    const colIdx = visibleColumns.findIndex((c) => c.id === colId)
+    if (rowIdx === -1 || colIdx === -1) return
+    const newRow = sorted[rowIdx + dir]
+    focusCell(newRow ? newRow.id : rowId, visibleColumns[colIdx].id)
+  }
+
+  // Commits the in-progress edit and lands on the destination cell in
+  // navigation mode (selected, not editing) — never re-enters edit mode
+  // automatically, matching Enter/Tab's spreadsheet-style "confirm and move."
+  function moveAfterEdit(row: DbRow, colId: string, raw: string, dir: 'down' | 'left' | 'right') {
+    commitEdit(row, colId, raw) // its own guard already nulls `editing` for this cell
+    if (dir === 'down') moveVertical(row.id, colId, 1)
+    else moveHorizontal(row.id, colId, dir === 'right' ? 1 : -1)
+  }
+
+  // Unmounting the editing <input> doesn't hand focus back to its containing
+  // <td> automatically — the browser drops it to <body>. Refocus explicitly so
+  // Escape leaves you in navigation mode on the same cell, not focus-less.
+  function cancelEdit() {
+    const cell = editing
+    setEditing(null)
+    if (cell) focusCell(cell.rowId, cell.colId)
+  }
+
+  function clearCell(row: DbRow, col: Column) {
+    if (col.type === 'rollup') return
+    const empty = col.type === 'checkbox' ? false : col.type === 'multi_select' || col.type === 'relation' ? [] : null
+    onUpdateRow(row.id, { ...(row.properties as Record<string, unknown>), [col.id]: empty })
+  }
+
+  // Only fires for a cell that's merely selected (navigation mode), not the one
+  // currently being edited (SortableRow guards that) — an open input/dropdown
+  // handles its own keys.
+  function handleCellKeyDown(e: React.KeyboardEvent, row: DbRow, col: Column) {
+    if (e.key === 'ArrowUp') {
+      e.preventDefault()
+      moveVertical(row.id, col.id, -1)
+    } else if (e.key === 'ArrowDown') {
+      e.preventDefault()
+      moveVertical(row.id, col.id, 1)
+    } else if (e.key === 'ArrowLeft') {
+      e.preventDefault()
+      moveHorizontal(row.id, col.id, -1)
+    } else if (e.key === 'ArrowRight') {
+      e.preventDefault()
+      moveHorizontal(row.id, col.id, 1)
+    } else if (e.key === 'Tab') {
+      // Tab (and Shift+Tab) move like arrow-right/left but wrap at row ends —
+      // the same "next cell" semantics as Tab already has while editing.
+      e.preventDefault()
+      moveHorizontal(row.id, col.id, e.shiftKey ? -1 : 1)
+    } else if (e.key === 'Enter' || e.key === 'F2') {
+      e.preventDefault()
+      if (col.type === 'checkbox') toggleCheck(row, col.id) // startEdit no-ops on checkbox columns
+      else startEdit(row.id, col)
+    } else if (e.key === ' ' && col.type === 'checkbox') {
+      e.preventDefault()
+      toggleCheck(row, col.id)
+    } else if (e.key === 'Delete' || e.key === 'Backspace') {
+      e.preventDefault()
+      clearCell(row, col)
+    } else if (e.key === 'Escape') {
+      // A second Escape (first one, while editing, just cancels the edit and
+      // stays in navigation mode) exits navigation mode entirely.
+      e.preventDefault()
+      setSelected(null)
+      ;(document.activeElement as HTMLElement | null)?.blur()
+    }
   }
 
   function commitEdit(row: DbRow, colId: string, raw: string) {
@@ -295,7 +406,15 @@ export function TableView({ schema, onUpdateRow, onDeleteRow, onAddRow, onUpdate
       {/* Table */}
       <div className="border border-gray-200 dark:border-gray-700 rounded-lg overflow-hidden">
         <div className={lockHeaders ? 'max-h-[70vh] overflow-auto' : 'overflow-x-auto'}>
-          <table className="w-full border-collapse text-sm">
+          <table
+            className="w-full border-collapse text-sm"
+            onBlur={(e) => {
+              // Focus moved somewhere outside the table entirely (filter box, a
+              // button, another page) — exit navigation mode. Focus moving between
+              // cells/inputs/dropdowns within the table itself stays contained.
+              if (!e.currentTarget.contains(e.relatedTarget as Node | null)) setSelected(null)
+            }}
+          >
             <thead>
               <tr className={`${lockHeaders ? 'sticky top-0 z-20' : ''} bg-[#f7f7f5] dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700`}>
                 <th className="w-6 px-1 py-2" />
@@ -339,22 +458,26 @@ export function TableView({ schema, onUpdateRow, onDeleteRow, onAddRow, onUpdate
             >
               <SortableContext items={sorted.map((r) => r.id)} strategy={verticalListSortingStrategy}>
                 <tbody>
-                  {sorted.map((row, i) => (
+                  {sorted.map((row) => (
                     <SortableRow
                       key={row.id}
                       row={row}
-                      nextRowId={sorted[i + 1]?.id}
                       visibleColumns={visibleColumns}
                       colMap={colMap}
                       lockFirstColumn={lockFirstColumn}
                       sortable={rowsSortable}
                       editing={editing}
+                      selected={selected}
                       selectOpen={selectOpen}
                       relationOpen={relationOpen}
                       inputRef={inputRef}
+                      cellRefs={cellRefs}
                       onStartEdit={startEdit}
+                      onSelectCell={selectCell}
+                      onCellKeyDown={handleCellKeyDown}
                       onCommitEdit={commitEdit}
-                      onCancelEdit={() => setEditing(null)}
+                      onMoveAfterEdit={moveAfterEdit}
+                      onCancelEdit={cancelEdit}
                       onToggleCheck={toggleCheck}
                       onSetSelect={setSelect}
                       onToggleMulti={toggleMulti}
@@ -450,17 +573,21 @@ function SortableColumnHeader({ col, isFirst, lockFirstColumn, sortable, sortSta
 
 interface SortableRowProps {
   row: DbRow
-  nextRowId?: string
   visibleColumns: Column[]
   colMap: Map<string, Column>
   lockFirstColumn: boolean
   sortable: boolean
   editing: EditCell
+  selected: EditCell
   selectOpen: EditCell
   relationOpen: EditCell
   inputRef: React.RefObject<HTMLInputElement | null>
+  cellRefs: React.RefObject<Map<string, HTMLTableCellElement>>
   onStartEdit: (rowId: string, col: Column) => void
+  onSelectCell: (rowId: string, colId: string) => void
+  onCellKeyDown: (e: React.KeyboardEvent, row: DbRow, col: Column) => void
   onCommitEdit: (row: DbRow, colId: string, raw: string) => void
+  onMoveAfterEdit: (row: DbRow, colId: string, raw: string, dir: 'down' | 'left' | 'right') => void
   onCancelEdit: () => void
   onToggleCheck: (row: DbRow, colId: string) => void
   onSetSelect: (row: DbRow, colId: string, value: string) => void
@@ -473,9 +600,9 @@ interface SortableRowProps {
 }
 
 function SortableRow({
-  row, nextRowId, visibleColumns, colMap, lockFirstColumn, sortable, editing, selectOpen, relationOpen, inputRef,
-  onStartEdit, onCommitEdit, onCancelEdit, onToggleCheck, onSetSelect, onToggleMulti, onClearMulti,
-  onToggleRelation, onCloseSelect, onCloseRelation, onDeleteRow,
+  row, visibleColumns, colMap, lockFirstColumn, sortable, editing, selected, selectOpen, relationOpen,
+  inputRef, cellRefs, onStartEdit, onSelectCell, onCellKeyDown, onCommitEdit, onMoveAfterEdit, onCancelEdit,
+  onToggleCheck, onSetSelect, onToggleMulti, onClearMulti, onToggleRelation, onCloseSelect, onCloseRelation, onDeleteRow,
 }: SortableRowProps) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
     id: row.id,
@@ -504,22 +631,45 @@ function SortableRow({
           </span>
         )}
       </td>
-      {visibleColumns.map((col, i) => (
+      {visibleColumns.map((col, i) => {
+        const isEditingCell = editing?.rowId === row.id && editing?.colId === col.id
+        const isSelectedCell = selected?.rowId === row.id && selected?.colId === col.id
+        const isDropdownOpenForCell =
+          (selectOpen?.rowId === row.id && selectOpen?.colId === col.id) ||
+          (relationOpen?.rowId === row.id && relationOpen?.colId === col.id)
+        return (
         <td
           key={col.id}
-          className={`px-3 py-2 border-r border-gray-100 dark:border-gray-800 last:border-r-0 cursor-text relative ${
-            lockFirstColumn && i === 0
-              ? 'sticky left-0 z-10 bg-white dark:bg-gray-900 group-hover:bg-[#fafafa] dark:group-hover:bg-gray-800/50'
-              : ''
-          }`}
+          ref={(el) => {
+            const key = `${row.id}:${col.id}`
+            if (el) cellRefs.current.set(key, el)
+            else cellRefs.current.delete(key)
+          }}
+          tabIndex={0}
+          className={cn(
+            'px-3 py-2 border-r border-gray-100 dark:border-gray-800 last:border-r-0 cursor-text relative outline-none',
+            lockFirstColumn && i === 0 && 'sticky left-0 z-10 bg-white dark:bg-gray-900 group-hover:bg-[#fafafa] dark:group-hover:bg-gray-800/50',
+            isSelectedCell && !isEditingCell && 'ring-2 ring-inset ring-blue-400 dark:ring-blue-500',
+          )}
+          onFocus={() => onSelectCell(row.id, col.id)}
           onClick={() => onStartEdit(row.id, col)}
+          onKeyDown={(e) => {
+            if (!isEditingCell && !isDropdownOpenForCell) onCellKeyDown(e, row, col)
+          }}
         >
           {col.type === 'checkbox' ? (
             <input
               type="checkbox"
+              tabIndex={-1}
               checked={!!(getProp(row, col.id) as boolean)}
-              onChange={() => onToggleCheck(row, col.id)}
-              onClick={(e) => e.stopPropagation()}
+              // preventDefault on mousedown stops the checkbox itself from stealing focus
+              // (its own click/change toggle still fires normally) — we want DOM focus to
+              // land on the containing <td> instead, so arrow-key nav keeps working from here.
+              onMouseDown={(e) => e.preventDefault()}
+              onChange={() => {
+                onToggleCheck(row, col.id)
+                cellRefs.current.get(`${row.id}:${col.id}`)?.focus()
+              }}
               className="cursor-pointer accent-blue-500"
             />
           ) : col.type === 'rollup' ? (
@@ -545,12 +695,10 @@ function SortableRow({
               onKeyDown={(e) => {
                 if (e.key === 'Enter') {
                   e.preventDefault()
-                  onCommitEdit(row, col.id, (e.target as HTMLInputElement).value)
-                  if (nextRowId) onStartEdit(nextRowId, col)
-                } else if (e.key === 'Tab' && !e.shiftKey && visibleColumns[i + 1]) {
+                  onMoveAfterEdit(row, col.id, (e.target as HTMLInputElement).value, 'down')
+                } else if (e.key === 'Tab') {
                   e.preventDefault()
-                  onCommitEdit(row, col.id, (e.target as HTMLInputElement).value)
-                  onStartEdit(row.id, visibleColumns[i + 1])
+                  onMoveAfterEdit(row, col.id, (e.target as HTMLInputElement).value, e.shiftKey ? 'left' : 'right')
                 } else if (e.key === 'Escape') {
                   onCancelEdit()
                 }
@@ -600,7 +748,8 @@ function SortableRow({
             </span>
           )}
         </td>
-      ))}
+        )
+      })}
       <td className="border-r border-gray-100 dark:border-gray-800" />
       <td className="pr-2 text-right">
         <button

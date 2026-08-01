@@ -212,6 +212,15 @@ Adds the `ApiKey` table to the database.
 
 ---
 
+## Phase 7 — Table View Keyboard Navigation ✅ Complete
+
+- [x] **Excel-style cell navigation in Table view** — clicking a cell still edits it immediately (unchanged base behavior). Tab/Enter while editing commits the value and lands on the next cell in navigation mode (selected, not editing) rather than immediately re-entering edit mode: Enter moves down the same column, Tab/Shift+Tab move right/left. Once a cell is merely selected (not editing), arrow keys and Tab/Shift+Tab move around the grid — Tab/ArrowRight/ArrowLeft wrap to the next/previous row at row boundaries, while ArrowUp/ArrowDown clamp at the top/bottom row instead of wrapping. Enter/F2 edits the selected cell (or toggles a checkbox / opens a select or relation dropdown, per column type), Space toggles a selected checkbox, and Delete/Backspace clears it. Escape is two-stage: the first press cancels an in-progress edit and drops back to navigation mode on that same cell; a second press (or clicking anywhere outside the table) deselects entirely.
+
+**Changed frontend files:**
+- `components/database/TableView.tsx` — added a `selected` (navigation-mode) state alongside `editing`, a per-cell DOM ref map so keyboard movement can drive native focus directly, and row/column-wrap-aware navigation helpers (`moveHorizontal`, `moveVertical`, `moveAfterEdit`).
+
+---
+
 ## First Boot Instructions
 
 ```bash
