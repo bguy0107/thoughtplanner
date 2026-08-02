@@ -1,6 +1,6 @@
 'use client'
 
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { LayoutList, Columns3, LayoutGrid, CalendarDays, Settings2, FileSpreadsheet } from 'lucide-react'
 import { api, type Column, type DbSchema, type Page } from '@/lib/api'
 import { TableView } from './TableView'
@@ -36,9 +36,23 @@ export function DatabaseView({ page, onTitleChange }: Props) {
     setMeta({ updatedAt: page.updatedAt, updatedBy: page.updatedBy })
   }, [page.updatedAt, page.updatedBy])
 
+  // Row/schema edits happen one at a time but often in quick bursts (e.g.
+  // editing several cells or picking colors for several options in a row) —
+  // each mutation calling refreshMeta immediately would fire a separate
+  // GET /api/pages/:id per edit, which is what was blowing through the API's
+  // per-minute rate limit. Debouncing collapses a burst into a single fetch
+  // once things settle.
+  const refreshMetaTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
   const refreshMeta = useCallback(() => {
-    api.pages.get(page.id).then((p) => setMeta({ updatedAt: p.updatedAt, updatedBy: p.updatedBy }))
+    if (refreshMetaTimer.current) clearTimeout(refreshMetaTimer.current)
+    refreshMetaTimer.current = setTimeout(() => {
+      api.pages.get(page.id).then((p) => setMeta({ updatedAt: p.updatedAt, updatedBy: p.updatedBy }))
+    }, 600)
   }, [page.id])
+
+  useEffect(() => () => {
+    if (refreshMetaTimer.current) clearTimeout(refreshMetaTimer.current)
+  }, [])
 
   const handleImported = useCallback(() => {
     setShowImport(false)
@@ -69,6 +83,20 @@ export function DatabaseView({ page, onTitleChange }: Props) {
       : s)
     refreshMeta()
   }, [refreshMeta])
+
+  // Used by SchemaBuilder for edits that touch many rows at once (converting
+  // a column's type, clearing a removed option from every row that held it)
+  // — one request for the whole batch instead of one PATCH per row, which is
+  // what let a handful of those edits on a modest table blow through the
+  // API's rate limit.
+  const handleUpdateRowsBulk = useCallback(async (patches: { id: string; properties: Record<string, unknown> }[]) => {
+    const updated = await api.databases.updateRowsBulk(page.id, patches)
+    const byId = new Map(updated.map((r) => [r.id, r]))
+    setSchema((s) => s
+      ? { ...s, rows: s.rows.map((r) => byId.get(r.id) ?? r) }
+      : s)
+    refreshMeta()
+  }, [page.id, refreshMeta])
 
   const handleDeleteRow = useCallback(async (rowId: string) => {
     await api.databases.deleteRow(rowId)
@@ -203,7 +231,7 @@ export function DatabaseView({ page, onTitleChange }: Props) {
           <SchemaBuilder
             schema={schema}
             onUpdate={handleUpdateSchema}
-            onUpdateRow={handleUpdateRow}
+            onUpdateRowsBulk={handleUpdateRowsBulk}
             onClose={() => setShowSchema(false)}
           />
         )}

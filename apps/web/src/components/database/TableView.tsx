@@ -34,20 +34,51 @@ const TYPE_ICONS: Record<ColumnType, React.ReactNode> = {
   rollup: <RefreshCw size={12} />,
 }
 
-const CHIP_COLORS = [
-  'bg-blue-100 text-blue-700 dark:bg-blue-950/50 dark:text-blue-300',
-  'bg-green-100 text-green-700 dark:bg-green-950/50 dark:text-green-300',
-  'bg-yellow-100 text-yellow-700 dark:bg-yellow-950/50 dark:text-yellow-300',
-  'bg-purple-100 text-purple-700 dark:bg-purple-950/50 dark:text-purple-300',
-  'bg-red-100 text-red-700 dark:bg-red-950/50 dark:text-red-300',
-  'bg-orange-100 text-orange-700 dark:bg-orange-950/50 dark:text-orange-300',
-  'bg-pink-100 text-pink-700 dark:bg-pink-950/50 dark:text-pink-300',
-  'bg-teal-100 text-teal-700 dark:bg-teal-950/50 dark:text-teal-300',
-]
+export const OPTION_COLOR_NAMES = ['blue', 'green', 'yellow', 'purple', 'red', 'orange', 'pink', 'teal'] as const
+export type OptionColorName = typeof OPTION_COLOR_NAMES[number]
 
-export function chipColor(options: string[], value: string) {
+const CHIP_COLOR_CLASSES: Record<OptionColorName, string> = {
+  blue: 'bg-blue-100 text-blue-700 dark:bg-blue-950/50 dark:text-blue-300',
+  green: 'bg-green-100 text-green-700 dark:bg-green-950/50 dark:text-green-300',
+  yellow: 'bg-yellow-100 text-yellow-700 dark:bg-yellow-950/50 dark:text-yellow-300',
+  purple: 'bg-purple-100 text-purple-700 dark:bg-purple-950/50 dark:text-purple-300',
+  red: 'bg-red-100 text-red-700 dark:bg-red-950/50 dark:text-red-300',
+  orange: 'bg-orange-100 text-orange-700 dark:bg-orange-950/50 dark:text-orange-300',
+  pink: 'bg-pink-100 text-pink-700 dark:bg-pink-950/50 dark:text-pink-300',
+  teal: 'bg-teal-100 text-teal-700 dark:bg-teal-950/50 dark:text-teal-300',
+}
+
+// Solid swatch classes for the color picker — kept as static literals (not
+// built from the name via a template string) so Tailwind's static analysis
+// can see and keep them.
+export const OPTION_SWATCH_CLASSES: Record<OptionColorName, string> = {
+  blue: 'bg-blue-500',
+  green: 'bg-green-500',
+  yellow: 'bg-yellow-500',
+  purple: 'bg-purple-500',
+  red: 'bg-red-500',
+  orange: 'bg-orange-500',
+  pink: 'bg-pink-500',
+  teal: 'bg-teal-500',
+}
+
+function isOptionColorName(name: string | undefined): name is OptionColorName {
+  return !!name && (OPTION_COLOR_NAMES as readonly string[]).includes(name)
+}
+
+// The color an option resolves to: an explicit user-picked color if set,
+// otherwise the auto-assigned color based on the option's position in the
+// list (so uncustomized options keep spreading across the palette instead of
+// all defaulting to the same color).
+export function optionColorName(options: string[], value: string, optionColors?: Record<string, string>): OptionColorName {
+  const chosen = optionColors?.[value]
+  if (isOptionColorName(chosen)) return chosen
   const i = options.indexOf(value)
-  return CHIP_COLORS[i < 0 ? 0 : i % CHIP_COLORS.length]
+  return OPTION_COLOR_NAMES[i < 0 ? 0 : i % OPTION_COLOR_NAMES.length]
+}
+
+export function chipColor(options: string[], value: string, optionColors?: Record<string, string>) {
+  return CHIP_COLOR_CLASSES[optionColorName(options, value, optionColors)]
 }
 
 function getProp(row: DbRow, colId: string): unknown {
@@ -720,11 +751,12 @@ function SortableRow({
           ) : col.type === 'select' ? (
             <div className="relative">
               {getProp(row, col.id)
-                ? <span className={`px-2 py-0.5 rounded text-xs font-medium ${chipColor(col.options ?? [], getProp(row, col.id) as string)}`}>{getProp(row, col.id) as string}</span>
+                ? <span className={`px-2 py-0.5 rounded text-xs font-medium ${chipColor(col.options ?? [], getProp(row, col.id) as string, col.optionColors)}`}>{getProp(row, col.id) as string}</span>
                 : <span className="text-gray-300 dark:text-gray-600 text-xs">—</span>}
               {selectOpen?.rowId === row.id && selectOpen?.colId === col.id && (
                 <OptionDropdown
                   options={col.options ?? []}
+                  optionColors={col.optionColors}
                   selected={[getProp(row, col.id) as string].filter(Boolean)}
                   isMulti={false}
                   onSelect={(v) => onSetSelect(row, col.id, v)}
@@ -736,7 +768,7 @@ function SortableRow({
             <div className="relative">
               <div className="flex flex-wrap gap-1 min-h-[20px]">
                 {getMultiSelectValue(row, col.id).map((opt) => (
-                  <span key={opt} className={`px-2 py-0.5 rounded text-xs font-medium ${chipColor(col.options ?? [], opt)}`}>{opt}</span>
+                  <span key={opt} className={`px-2 py-0.5 rounded text-xs font-medium ${chipColor(col.options ?? [], opt, col.optionColors)}`}>{opt}</span>
                 ))}
                 {!getMultiSelectValue(row, col.id).length && (
                   <span className="text-gray-300 dark:text-gray-600 text-xs">—</span>
@@ -745,6 +777,7 @@ function SortableRow({
               {selectOpen?.rowId === row.id && selectOpen?.colId === col.id && (
                 <OptionDropdown
                   options={col.options ?? []}
+                  optionColors={col.optionColors}
                   selected={getMultiSelectValue(row, col.id)}
                   isMulti={true}
                   onToggle={(v) => onToggleMulti(row, col.id, v)}
@@ -863,6 +896,7 @@ function RelationCell({ row, col, isOpen, onToggle, onClose }: RelationCellProps
 
 interface OptionDropdownProps {
   options: string[]
+  optionColors?: Record<string, string>
   selected: string[]
   isMulti: boolean
   onSelect?: (value: string) => void
@@ -871,7 +905,7 @@ interface OptionDropdownProps {
   onClose: () => void
 }
 
-function OptionDropdown({ options, selected, isMulti, onSelect, onToggle, onClear, onClose }: OptionDropdownProps) {
+function OptionDropdown({ options, optionColors, selected, isMulti, onSelect, onToggle, onClear, onClose }: OptionDropdownProps) {
   const ref = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
@@ -902,7 +936,7 @@ function OptionDropdown({ options, selected, isMulti, onSelect, onToggle, onClea
               {selected.includes(opt) && '✓'}
             </span>
           )}
-          <span className={`px-2 py-0.5 rounded text-xs font-medium ${chipColor(options, opt)}`}>{opt}</span>
+          <span className={`px-2 py-0.5 rounded text-xs font-medium ${chipColor(options, opt, optionColors)}`}>{opt}</span>
         </button>
       ))}
       {isMulti && selected.length > 0 && (

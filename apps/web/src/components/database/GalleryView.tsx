@@ -69,13 +69,13 @@ function GalleryCard({ row, schema, onDelete, onEditName }: GalleryCardProps) {
                 {val ? 'Yes' : 'No'}
               </span>
             ) : col.type === 'select' ? (
-              <span className={`text-xs px-2 py-0.5 rounded font-medium ${chipColor(col.options ?? [], val as string)}`}>
+              <span className={`text-xs px-2 py-0.5 rounded font-medium ${chipColor(col.options ?? [], val as string, col.optionColors)}`}>
                 {val as string}
               </span>
             ) : col.type === 'multi_select' && Array.isArray(val) ? (
               <div className="flex flex-wrap gap-1">
                 {(val as string[]).map((opt) => (
-                  <span key={opt} className={`text-xs px-2 py-0.5 rounded font-medium ${chipColor(col.options ?? [], opt)}`}>{opt}</span>
+                  <span key={opt} className={`text-xs px-2 py-0.5 rounded font-medium ${chipColor(col.options ?? [], opt, col.optionColors)}`}>{opt}</span>
                 ))}
               </div>
             ) : (

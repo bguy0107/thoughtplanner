@@ -1,10 +1,11 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { AlignLeft, Calendar, CheckSquare, ChevronDown, ChevronRight, Hash, Link, Plus, Tags, Trash2, X, RefreshCw } from 'lucide-react'
 import { api, type Column, type ColumnType, type DbSchema, type PageSummary, type RollupOperation } from '@/lib/api'
 import { ConfirmModal } from '@/components/ui/ConfirmModal'
 import { PromptModal } from '@/components/ui/PromptModal'
+import { OPTION_COLOR_NAMES, OPTION_SWATCH_CLASSES, optionColorName, type OptionColorName } from './TableView'
 
 const TYPE_LABELS: Record<ColumnType, string> = {
   text: 'Text',
@@ -41,15 +42,19 @@ const ROLLUP_OPS: RollupOperation[] = ['count', 'sum', 'avg', 'min', 'max']
 interface Props {
   schema: DbSchema
   onUpdate: (columns: Column[]) => void
-  onUpdateRow: (rowId: string, properties: Record<string, unknown>) => void
+  // These schema edits (converting a column's type, clearing a removed
+  // option) touch every row that holds a value for the column, so they're
+  // sent as one batched request instead of one PATCH per row.
+  onUpdateRowsBulk: (patches: { id: string; properties: Record<string, unknown> }[]) => void
   onClose: () => void
 }
 
-export function SchemaBuilder({ schema, onUpdate, onUpdateRow, onClose }: Props) {
+export function SchemaBuilder({ schema, onUpdate, onUpdateRowsBulk, onClose }: Props) {
   const [expanded, setExpanded] = useState<string | null>(null)
   const [dbPages, setDbPages] = useState<PageSummary[]>([])
   const [deleteColumnId, setDeleteColumnId] = useState<string | null>(null)
   const [addOptionFor, setAddOptionFor] = useState<string | null>(null)
+  const [colorPickerFor, setColorPickerFor] = useState<{ colId: string; opt: string } | null>(null)
 
   useEffect(() => {
     api.pages.list().then((pages) => setDbPages(pages.filter((p) => p.isDatabase)))
@@ -97,14 +102,14 @@ export function SchemaBuilder({ schema, onUpdate, onUpdateRow, onClose }: Props)
       targetColId: undefined,
       operation: undefined,
     })
-    for (const row of schema.rows) {
-      if (row.properties[col.id] === undefined) continue
+    const patches = schema.rows
+      .filter((row) => row.properties[col.id] !== undefined)
       // Setting to null (rather than sending a diff that omits the key) matches
-      // onUpdateRow's partial-patch contract — the server merges keys present
+      // the bulk patch's partial-patch contract — the server merges keys present
       // in the patch, so an omitted key wouldn't clear anything. getProp()
       // treats null the same as "absent" everywhere else in the database views.
-      onUpdateRow(row.id, { [col.id]: null })
-    }
+      .map((row) => ({ id: row.id, properties: { [col.id]: null } }))
+    if (patches.length > 0) onUpdateRowsBulk(patches)
   }
 
   // Renders a scalar cell value the way it would read as a select option
@@ -142,7 +147,9 @@ export function SchemaBuilder({ schema, onUpdate, onUpdateRow, onClose }: Props)
       targetColId: undefined,
       operation: undefined,
     })
-    for (const { rowId, value } of updates) onUpdateRow(rowId, { [col.id]: value })
+    if (updates.length > 0) {
+      onUpdateRowsBulk(updates.map(({ rowId, value }) => ({ id: rowId, properties: { [col.id]: value } })))
+    }
   }
 
   function addOption(col: Column, name: string) {
@@ -154,15 +161,24 @@ export function SchemaBuilder({ schema, onUpdate, onUpdateRow, onClose }: Props)
   // value — otherwise the stale value lingers invisibly (and reappears if an
   // option with the same name is ever re-added).
   function removeOption(col: Column, opt: string) {
-    updateColumn(col.id, { options: (col.options ?? []).filter((o) => o !== opt) })
+    const nextColors = { ...(col.optionColors ?? {}) }
+    delete nextColors[opt]
+    updateColumn(col.id, { options: (col.options ?? []).filter((o) => o !== opt), optionColors: nextColors })
+    const patches: { id: string; properties: Record<string, unknown> }[] = []
     for (const row of schema.rows) {
       const val = row.properties[col.id]
       if (col.type === 'select' && val === opt) {
-        onUpdateRow(row.id, { [col.id]: null })
+        patches.push({ id: row.id, properties: { [col.id]: null } })
       } else if (col.type === 'multi_select' && Array.isArray(val) && val.includes(opt)) {
-        onUpdateRow(row.id, { [col.id]: (val as string[]).filter((v) => v !== opt) })
+        patches.push({ id: row.id, properties: { [col.id]: (val as string[]).filter((v) => v !== opt) } })
       }
     }
+    if (patches.length > 0) onUpdateRowsBulk(patches)
+  }
+
+  function setOptionColor(col: Column, opt: string, colorName: OptionColorName) {
+    updateColumn(col.id, { optionColors: { ...(col.optionColors ?? {}), [opt]: colorName } })
+    setColorPickerFor(null)
   }
 
   const relationCols = schema.columns.filter((c) => c.type === 'relation')
@@ -244,7 +260,12 @@ export function SchemaBuilder({ schema, onUpdate, onUpdateRow, onClose }: Props)
                     <p className="text-xs font-medium text-gray-500 dark:text-gray-400 mb-1.5">Options</p>
                     <div className="space-y-1">
                       {(col.options ?? []).map((opt) => (
-                        <div key={opt} className="flex items-center gap-2 group">
+                        <div key={opt} className="relative flex items-center gap-2 group">
+                          <button
+                            onClick={() => setColorPickerFor((c) => c?.colId === col.id && c?.opt === opt ? null : { colId: col.id, opt })}
+                            className={`w-3.5 h-3.5 rounded-full flex-shrink-0 ring-1 ring-black/10 dark:ring-white/20 ${OPTION_SWATCH_CLASSES[optionColorName(col.options ?? [], opt, col.optionColors)]}`}
+                            aria-label={`Change color for ${opt}`}
+                          />
                           <span className="flex-1 text-sm text-gray-700 dark:text-gray-300 truncate">{opt}</span>
                           <button
                             onClick={() => removeOption(col, opt)}
@@ -252,6 +273,13 @@ export function SchemaBuilder({ schema, onUpdate, onUpdateRow, onClose }: Props)
                           >
                             <X size={12} />
                           </button>
+                          {colorPickerFor?.colId === col.id && colorPickerFor?.opt === opt && (
+                            <ColorPickerPopover
+                              value={optionColorName(col.options ?? [], opt, col.optionColors)}
+                              onSelect={(name) => setOptionColor(col, opt, name)}
+                              onClose={() => setColorPickerFor(null)}
+                            />
+                          )}
                         </div>
                       ))}
                     </div>
@@ -363,5 +391,42 @@ export function SchemaBuilder({ schema, onUpdate, onUpdateRow, onClose }: Props)
         />
       )}
     </aside>
+  )
+}
+
+// ─── ColorPickerPopover ────────────────────────────────────────────────────
+
+function ColorPickerPopover({ value, onSelect, onClose }: {
+  value: OptionColorName
+  onSelect: (name: OptionColorName) => void
+  onClose: () => void
+}) {
+  const ref = useRef<HTMLDivElement>(null)
+
+  useEffect(() => {
+    function handleMouseDown(e: MouseEvent) {
+      if (!ref.current?.contains(e.target as Node)) onClose()
+    }
+    document.addEventListener('mousedown', handleMouseDown)
+    return () => document.removeEventListener('mousedown', handleMouseDown)
+  }, [onClose])
+
+  return (
+    <div
+      ref={ref}
+      onClick={(e) => e.stopPropagation()}
+      className="absolute left-0 top-full z-50 mt-1 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg shadow-lg p-2 flex gap-1.5"
+    >
+      {OPTION_COLOR_NAMES.map((name) => (
+        <button
+          key={name}
+          onClick={() => onSelect(name)}
+          className={`w-5 h-5 rounded-full transition-transform hover:scale-110 ${OPTION_SWATCH_CLASSES[name]} ${
+            value === name ? 'ring-2 ring-offset-1 ring-blue-500 dark:ring-offset-gray-800' : ''
+          }`}
+          aria-label={name}
+        />
+      ))}
+    </div>
   )
 }

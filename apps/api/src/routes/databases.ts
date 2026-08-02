@@ -14,6 +14,7 @@ const ColumnSchema = z.object({
   name: z.string().min(1),
   type: z.enum(['text', 'number', 'checkbox', 'date', 'select', 'multi_select', 'relation', 'rollup']),
   options: z.array(z.string()).optional(),
+  optionColors: z.record(z.string()).optional(), // select / multi_select: option value -> color name
   targetPageId: z.string().optional(),   // relation
   relationColId: z.string().optional(),  // rollup
   targetColId: z.string().optional(),    // rollup
@@ -27,6 +28,12 @@ const CreateRowBodySchema = z.object({ properties: z.record(z.unknown()).default
 const UpdateRowBodySchema = z.object({
   properties: z.record(z.unknown()).optional(),
   position: z.number().optional(),
+})
+const BulkUpdateRowsBodySchema = z.object({
+  patches: z.array(z.object({
+    id: z.string(),
+    properties: z.record(z.unknown()),
+  })).min(1).max(500),
 })
 
 async function computeRollups(
@@ -297,6 +304,47 @@ export async function databaseRoutes(app: FastifyInstance) {
     if (properties !== undefined) await touchPage(existing.pageId, session.user.id)
 
     return row
+  })
+
+  // PATCH /api/databases/:pageId/rows/bulk — apply many per-row property
+  // patches in one request/transaction (e.g. clearing a removed select
+  // option from every row that held it, or rewriting every row when a
+  // column converts to select) instead of one PATCH per row — a handful of
+  // those schema edits on a modest table was enough to blow through the
+  // rate limit when each row got its own HTTP round trip.
+  app.patch<{ Params: { pageId: string } }>('/api/databases/:pageId/rows/bulk', async (req, reply) => {
+    const session = await getSession(req)
+    if (!session) return reply.status(401).send({ error: 'Unauthorized' })
+
+    const access = await requirePageAccess(session.user.id, req.params.pageId, 'EDITOR')
+    if (!access.ok) return reply.status(access.status).send({ error: access.error })
+
+    const body = BulkUpdateRowsBodySchema.safeParse(req.body)
+    if (!body.success) return reply.status(400).send({ error: body.error.flatten() })
+
+    const rows = await prisma.$transaction(async (tx) => {
+      const updated: Awaited<ReturnType<typeof tx.databaseRow.update>>[] = []
+      for (const patch of body.data.patches) {
+        // Same lock-then-merge as the single-row PATCH above, and same
+        // pageId scoping as every other handler here — a patch naming a row
+        // from another page is silently skipped rather than applied
+        // cross-tenant.
+        const [locked] = await tx.$queryRaw<Array<{ properties: Record<string, unknown> }>>`
+          SELECT properties FROM "DatabaseRow" WHERE id = ${patch.id} AND "pageId" = ${req.params.pageId} FOR UPDATE
+        `
+        if (!locked) continue
+        const merged = { ...locked.properties, ...patch.properties }
+        updated.push(await tx.databaseRow.update({
+          where: { id: patch.id },
+          data: { properties: merged as Prisma.InputJsonValue },
+        }))
+      }
+      return updated
+    })
+
+    if (rows.length > 0) await touchPage(req.params.pageId, session.user.id)
+
+    return rows
   })
 
   // DELETE /api/databases/rows/:rowId — delete a row

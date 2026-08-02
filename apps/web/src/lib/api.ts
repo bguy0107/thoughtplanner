@@ -90,6 +90,7 @@ export type Column = {
   name: string
   type: ColumnType
   options?: string[]          // select / multi_select
+  optionColors?: Record<string, string> // select / multi_select: option value -> color name
   targetPageId?: string       // relation: database page to link to
   relationColId?: string      // rollup: which relation col to follow
   targetColId?: string        // rollup: column in target db to aggregate
@@ -207,6 +208,14 @@ export const api = {
       request<DbRow>(`/api/databases/rows/${rowId}`, {
         method: 'PATCH',
         body: JSON.stringify({ properties }),
+      }),
+    // Applies many per-row property patches in a single request — used for
+    // schema-driven bulk edits (converting a column to select, removing an
+    // option) that would otherwise fire one PATCH per affected row.
+    updateRowsBulk: (pageId: string, patches: { id: string; properties: Record<string, unknown> }[]) =>
+      request<DbRow[]>(`/api/databases/${pageId}/rows/bulk`, {
+        method: 'PATCH',
+        body: JSON.stringify({ patches }),
       }),
     reorderRow: (rowId: string, position: number) =>
       request<DbRow>(`/api/databases/rows/${rowId}`, {

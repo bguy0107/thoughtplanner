@@ -90,7 +90,7 @@ export function BoardView({ schema, onUpdateRow, onDeleteRow, onAddRow }: Props)
   const options = groupCol.options ?? []
   const groups = [
     { label: 'No status', value: null as string | null, color: 'bg-gray-100 text-gray-500 dark:bg-gray-700 dark:text-gray-400' },
-    ...options.map((opt, i) => ({ label: opt, value: opt, color: chipColor(options, opt) })),
+    ...options.map((opt) => ({ label: opt, value: opt, color: chipColor(options, opt, groupCol.optionColors) })),
   ]
 
   function rowGroup(row: DbRow): string | null {
