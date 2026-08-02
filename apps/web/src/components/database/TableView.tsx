@@ -218,6 +218,12 @@ export function TableView({ schema, onUpdateRow, onDeleteRow, onAddRow, onUpdate
 
   function selectCell(rowId: string, colId: string) {
     setSelected({ rowId, colId })
+    // Focus landing on a different cell means navigation moved away from whichever
+    // cell had a select/relation dropdown open — the outside-mousedown listeners in
+    // OptionDropdown/RelationCell don't fire for keyboard-driven focus changes (e.g.
+    // Tab), so close explicitly here too.
+    setSelectOpen((cur) => (cur && (cur.rowId !== rowId || cur.colId !== colId) ? null : cur))
+    setRelationOpen((cur) => (cur && (cur.rowId !== rowId || cur.colId !== colId) ? null : cur))
   }
 
   // Moves native focus to the target cell rather than just updating state —
@@ -475,6 +481,7 @@ export function TableView({ schema, onUpdateRow, onDeleteRow, onAddRow, onUpdate
                         lockFirstColumn={lockFirstColumn}
                         sortable={columnsSortable}
                         sortState={sort}
+                        isSelectedCol={selected?.colId === col.id}
                         onCycleSort={cycleSort}
                       />
                     ))}
@@ -565,10 +572,11 @@ interface SortableColumnHeaderProps {
   lockFirstColumn: boolean
   sortable: boolean
   sortState: SortState
+  isSelectedCol: boolean
   onCycleSort: (colId: string) => void
 }
 
-function SortableColumnHeader({ col, isFirst, lockFirstColumn, sortable, sortState, onCycleSort }: SortableColumnHeaderProps) {
+function SortableColumnHeader({ col, isFirst, lockFirstColumn, sortable, sortState, isSelectedCol, onCycleSort }: SortableColumnHeaderProps) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
     id: col.id,
     disabled: !sortable,
@@ -583,6 +591,7 @@ function SortableColumnHeader({ col, isFirst, lockFirstColumn, sortable, sortSta
       className={cn(
         'text-left px-3 py-2 font-medium text-gray-600 dark:text-gray-300 border-r border-gray-200 dark:border-gray-700 last:border-r-0 whitespace-nowrap',
         lockFirstColumn && isFirst && 'sticky left-0 z-30 bg-[#f7f7f5] dark:bg-gray-800',
+        isSelectedCol && 'bg-blue-50 dark:bg-blue-950/40',
         isDragging && 'opacity-50 z-40 relative',
       )}
     >
@@ -652,6 +661,7 @@ function SortableRow({
   })
 
   const style = sortable ? { transform: CSS.Transform.toString(transform), transition } : undefined
+  const isSelectedRow = selected?.rowId === row.id
 
   return (
     <tr
@@ -662,7 +672,7 @@ function SortableRow({
         isDragging && 'opacity-50 z-40 relative bg-white dark:bg-gray-900',
       )}
     >
-      <td className="w-6 px-1">
+      <td className={cn('w-6 px-1', isSelectedRow && 'bg-blue-50 dark:bg-blue-950/40')}>
         {sortable && (
           <span
             {...attributes}
@@ -676,6 +686,7 @@ function SortableRow({
       {visibleColumns.map((col, i) => {
         const isEditingCell = editing?.rowId === row.id && editing?.colId === col.id
         const isSelectedCell = selected?.rowId === row.id && selected?.colId === col.id
+        const isSelectedCol = selected?.colId === col.id
         const isDropdownOpenForCell =
           (selectOpen?.rowId === row.id && selectOpen?.colId === col.id) ||
           (relationOpen?.rowId === row.id && relationOpen?.colId === col.id)
@@ -691,6 +702,7 @@ function SortableRow({
           className={cn(
             'px-3 py-2 border-r border-gray-100 dark:border-gray-800 last:border-r-0 cursor-text relative outline-none',
             lockFirstColumn && i === 0 && 'sticky left-0 z-10 bg-white dark:bg-gray-900 group-hover:bg-[#fafafa] dark:group-hover:bg-gray-800/50',
+            (isSelectedRow || isSelectedCol) && 'bg-blue-50 dark:bg-blue-950/40',
             isSelectedCell && !isEditingCell && 'ring-2 ring-inset ring-blue-400 dark:ring-blue-500',
           )}
           onFocus={() => onSelectCell(row.id, col.id)}
