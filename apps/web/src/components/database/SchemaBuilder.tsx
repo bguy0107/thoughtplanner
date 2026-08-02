@@ -55,10 +55,29 @@ export function SchemaBuilder({ schema, onUpdate, onUpdateRowsBulk, onClose }: P
   const [deleteColumnId, setDeleteColumnId] = useState<string | null>(null)
   const [addOptionFor, setAddOptionFor] = useState<string | null>(null)
   const [colorPickerFor, setColorPickerFor] = useState<{ colId: string; opt: string } | null>(null)
+  // Columns of a rollup's linked database, fetched on demand so targetColId
+  // can be picked from a dropdown instead of typed in as a raw column id.
+  const [targetSchemaCols, setTargetSchemaCols] = useState<Record<string, Column[]>>({})
+  const [targetSchemaFailed, setTargetSchemaFailed] = useState<Record<string, boolean>>({})
 
   useEffect(() => {
     api.pages.list().then((pages) => setDbPages(pages.filter((p) => p.isDatabase)))
   }, [])
+
+  useEffect(() => {
+    const targetPageIds = new Set<string>()
+    for (const col of schema.columns) {
+      if (col.type !== 'rollup' || !col.relationColId) continue
+      const relCol = schema.columns.find((c) => c.id === col.relationColId && c.type === 'relation')
+      if (relCol?.targetPageId) targetPageIds.add(relCol.targetPageId)
+    }
+    for (const pageId of targetPageIds) {
+      if (pageId in targetSchemaCols || pageId in targetSchemaFailed) continue
+      api.databases.get(pageId)
+        .then((s) => setTargetSchemaCols((prev) => ({ ...prev, [pageId]: s.columns })))
+        .catch(() => setTargetSchemaFailed((prev) => ({ ...prev, [pageId]: true })))
+    }
+  }, [schema.columns, targetSchemaCols, targetSchemaFailed])
 
   function updateColumn(id: string, patch: Partial<Column>) {
     onUpdate(schema.columns.map((c) => c.id === id ? { ...c, ...patch } : c))
@@ -317,7 +336,7 @@ export function SchemaBuilder({ schema, onUpdate, onUpdateRowsBulk, onClose }: P
                       <p className="text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">Relation column</p>
                       <select
                         value={col.relationColId ?? ''}
-                        onChange={(e) => updateColumn(col.id, { relationColId: e.target.value || undefined })}
+                        onChange={(e) => updateColumn(col.id, { relationColId: e.target.value || undefined, targetColId: undefined })}
                         className="w-full text-xs border border-gray-300 dark:border-gray-600 rounded px-2 py-1.5 bg-white dark:bg-gray-900 dark:text-gray-200 outline-none focus:ring-2 focus:ring-blue-300"
                       >
                         <option value="">Select a relation…</option>
@@ -328,12 +347,34 @@ export function SchemaBuilder({ schema, onUpdate, onUpdateRowsBulk, onClose }: P
                     </div>
                     <div>
                       <p className="text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">Target column (in linked database)</p>
-                      <input
-                        value={col.targetColId ?? ''}
-                        onChange={(e) => updateColumn(col.id, { targetColId: e.target.value || undefined })}
-                        placeholder="Column ID from target database"
-                        className="w-full text-xs border border-gray-300 dark:border-gray-600 dark:bg-gray-900 dark:text-gray-200 rounded px-2 py-1.5 outline-none focus:ring-2 focus:ring-blue-300"
-                      />
+                      {(() => {
+                        const relCol = schema.columns.find((c) => c.id === col.relationColId && c.type === 'relation')
+                        if (!col.relationColId) {
+                          return <p className="text-xs text-gray-400 dark:text-gray-500 italic">Select a relation column first</p>
+                        }
+                        if (!relCol?.targetPageId) {
+                          return <p className="text-xs text-gray-400 dark:text-gray-500 italic">Set the relation&apos;s target database first</p>
+                        }
+                        if (targetSchemaFailed[relCol.targetPageId]) {
+                          return <p className="text-xs text-red-500 dark:text-red-400">Couldn&apos;t load columns for the linked database</p>
+                        }
+                        const targetCols = targetSchemaCols[relCol.targetPageId]
+                        if (!targetCols) {
+                          return <p className="text-xs text-gray-400 dark:text-gray-500 italic">Loading columns…</p>
+                        }
+                        return (
+                          <select
+                            value={col.targetColId ?? ''}
+                            onChange={(e) => updateColumn(col.id, { targetColId: e.target.value || undefined })}
+                            className="w-full text-xs border border-gray-300 dark:border-gray-600 rounded px-2 py-1.5 bg-white dark:bg-gray-900 dark:text-gray-200 outline-none focus:ring-2 focus:ring-blue-300"
+                          >
+                            <option value="">Select a column…</option>
+                            {targetCols.map((c) => (
+                              <option key={c.id} value={c.id}>{c.name}</option>
+                            ))}
+                          </select>
+                        )
+                      })()}
                     </div>
                     <div>
                       <p className="text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">Aggregation</p>
