@@ -2,7 +2,7 @@
 
 import { useState } from 'react'
 import { useRouter, usePathname } from 'next/navigation'
-import { ChevronRight, ChevronDown, Plus, Trash2, FileText, Table2, GripVertical } from 'lucide-react'
+import { ChevronRight, ChevronDown, Plus, Trash2, FileText, Database, GripVertical } from 'lucide-react'
 import { useDraggable, useDroppable } from '@dnd-kit/core'
 import { cn } from '@/lib/utils'
 import { type PageSummary, api } from '@/lib/api'
@@ -112,7 +112,7 @@ export function PageItem({ page, depth, tree }: PageItemProps) {
             {page.icon
               ? page.icon
               : page.isDatabase
-                ? <Table2 size={14} className="text-gray-400 dark:text-sidebar-dark-muted" />
+                ? <Database size={14} className="text-gray-400 dark:text-sidebar-dark-muted" />
                 : <FileText size={14} className="text-gray-400 dark:text-sidebar-dark-muted" />}
           </span>
           <span className="flex-1 truncate">{page.title || 'Untitled'}</span>

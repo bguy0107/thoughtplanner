@@ -33,7 +33,6 @@ Compose command on your home network or a VPS.
 - Drag-to-reorder rows and columns
 - Relations between databases + server-computed rollups
 - Import from Excel/CSV spreadsheets
-- Import from a Notion export (ZIP of pages + databases)
 
 ### Workspaces & collaboration
 - Multiple workspaces per instance — sidebar switcher to create and jump between them

@@ -2,7 +2,7 @@
 
 import { useMemo, useRef, useState } from 'react'
 import { useRouter } from 'next/navigation'
-import { Plus, PanelLeftClose, Table2, FileText, Search, Settings, FileDown, FileSpreadsheet } from 'lucide-react'
+import { Plus, PanelLeftClose, Database, FileText, Search, Settings, FileSpreadsheet } from 'lucide-react'
 import {
   DndContext,
   DragOverlay,
@@ -22,7 +22,6 @@ import { PageTree } from './PageTree'
 import { SidebarDragContext, parseZoneId } from './sidebar-dnd'
 import { WorkspaceSwitcher } from './WorkspaceSwitcher'
 import { SearchModal } from '@/components/SearchModal'
-import { NotionImportModal } from '@/components/NotionImportModal'
 import { SpreadsheetImportModal } from '@/components/SpreadsheetImportModal'
 import { ThemeToggle } from '@/components/ThemeToggle'
 import { useWorkspaceStore } from '@/store/workspace'
@@ -36,7 +35,6 @@ export function Sidebar({ onClose }: { onClose?: () => void }) {
   const currentWorkspaceId = useWorkspaceStore((s) => s.currentWorkspaceId)
   const tree = useMemo(() => buildPageTree(pages), [pages])
   const [searchOpen, setSearchOpen] = useState(false)
-  const [importOpen, setImportOpen] = useState(false)
   const [spreadsheetImportOpen, setSpreadsheetImportOpen] = useState(false)
 
   const [activeId, setActiveId] = useState<string | null>(null)
@@ -218,7 +216,7 @@ export function Sidebar({ onClose }: { onClose?: () => void }) {
                     {activePage.icon
                       ? activePage.icon
                       : activePage.isDatabase
-                        ? <Table2 size={14} className="text-gray-400 dark:text-sidebar-dark-muted" />
+                        ? <Database size={14} className="text-gray-400 dark:text-sidebar-dark-muted" />
                         : <FileText size={14} className="text-gray-400 dark:text-sidebar-dark-muted" />}
                   </span>
                   <span className="truncate max-w-[160px]">{activePage.title || 'Untitled'}</span>
@@ -241,15 +239,8 @@ export function Sidebar({ onClose }: { onClose?: () => void }) {
             onClick={handleNewDatabase}
             className="w-full flex items-center gap-2 px-3 py-1.5 text-sm text-gray-600 dark:text-sidebar-dark-text rounded hover:bg-[#ebebea] dark:hover:bg-sidebar-dark-hover transition-colors"
           >
-            <Table2 size={15} />
+            <Database size={15} />
             New database
-          </button>
-          <button
-            onClick={() => setImportOpen(true)}
-            className="w-full flex items-center gap-2 px-3 py-1.5 text-sm text-gray-400 dark:text-sidebar-dark-muted rounded hover:bg-[#ebebea] dark:hover:bg-sidebar-dark-hover transition-colors"
-          >
-            <FileDown size={15} />
-            Import from Notion
           </button>
           <button
             onClick={() => setSpreadsheetImportOpen(true)}
@@ -278,13 +269,6 @@ export function Sidebar({ onClose }: { onClose?: () => void }) {
       </aside>
 
       {searchOpen && <SearchModal onClose={() => setSearchOpen(false)} />}
-      {importOpen && currentWorkspaceId && (
-        <NotionImportModal
-          workspaceId={currentWorkspaceId}
-          onClose={() => setImportOpen(false)}
-          onImported={() => fetchPages(currentWorkspaceId)}
-        />
-      )}
       {spreadsheetImportOpen && currentWorkspaceId && (
         <SpreadsheetImportModal
           workspaceId={currentWorkspaceId}

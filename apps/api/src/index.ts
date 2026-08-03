@@ -43,7 +43,7 @@ await app.register(cors, {
 })
 
 await app.register(multipart, {
-  limits: { fileSize: 100 * 1024 * 1024 }, // 100 MB (raised for Notion zip imports)
+  limits: { fileSize: 100 * 1024 * 1024 }, // 100 MB (raised for large spreadsheet imports)
 })
 
 await app.register(fastifyWebSocket)
