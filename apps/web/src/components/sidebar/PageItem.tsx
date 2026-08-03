@@ -1,8 +1,8 @@
 'use client'
 
-import { useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useRouter, usePathname } from 'next/navigation'
-import { ChevronRight, ChevronDown, Plus, Trash2, FileText, Database, GripVertical } from 'lucide-react'
+import { ChevronRight, ChevronDown, Plus, Trash2, FileText, Database, Folder, GripVertical } from 'lucide-react'
 import { useDraggable, useDroppable } from '@dnd-kit/core'
 import { cn } from '@/lib/utils'
 import { type PageSummary, api } from '@/lib/api'
@@ -21,11 +21,42 @@ export function PageItem({ page, depth, tree }: PageItemProps) {
   const pathname = usePathname()
   const [hovered, setHovered] = useState(false)
   const expanded = useSidebarStore((s) => s.expandedIds.has(page.id))
-  const { addPage, removePage, expandPage, toggleExpanded } = useSidebarStore()
-  const { overId, invalidTargetIds } = useSidebarDrag()
+  const { addPage, removePage, expandPage, toggleExpanded, updatePage } = useSidebarStore()
+  const { overId, invalidTargetIds, renamingId, setRenamingId } = useSidebarDrag()
 
   const isActive = pathname === `/page/${page.id}`
   const isInvalidTarget = invalidTargetIds.has(page.id)
+  const isRenaming = renamingId === page.id
+  const [renameValue, setRenameValue] = useState(page.title)
+  const renameInputRef = useRef<HTMLInputElement>(null)
+  const renameCancelledRef = useRef(false)
+
+  useEffect(() => {
+    if (isRenaming) setRenameValue(page.title)
+  }, [isRenaming, page.title])
+
+  useEffect(() => {
+    if (isRenaming) {
+      renameCancelledRef.current = false
+      renameInputRef.current?.focus()
+      renameInputRef.current?.select()
+    }
+  }, [isRenaming])
+
+  function commitRename() {
+    if (renameCancelledRef.current) return
+    const title = renameValue.trim() || 'Untitled'
+    setRenamingId(null)
+    if (title !== page.title) {
+      updatePage(page.id, { title })
+      api.pages.update(page.id, { title }).catch(() => updatePage(page.id, { title: page.title }))
+    }
+  }
+
+  function cancelRename() {
+    renameCancelledRef.current = true
+    setRenamingId(null)
+  }
 
   const { attributes, listeners, setNodeRef: setDragRef, isDragging } = useDraggable({ id: page.id })
   const { setNodeRef: setBeforeRef } = useDroppable({ id: zoneId('before', page.id), disabled: isInvalidTarget })
@@ -48,6 +79,17 @@ export function PageItem({ page, depth, tree }: PageItemProps) {
     await api.pages.delete(page.id)
     removePage(page.id)
     if (isActive) router.push('/home')
+  }
+
+  function handleRowClick() {
+    if (page.isFolder) toggleExpanded(page.id)
+    else router.push(`/page/${page.id}`)
+  }
+
+  function handleRowKeyDown(e: React.KeyboardEvent) {
+    if (e.key !== 'Enter') return
+    if (page.isFolder) toggleExpanded(page.id)
+    else router.push(`/page/${page.id}`)
   }
 
   return (
@@ -74,8 +116,9 @@ export function PageItem({ page, depth, tree }: PageItemProps) {
         <div
           role="button"
           tabIndex={0}
-          onClick={() => router.push(`/page/${page.id}`)}
-          onKeyDown={(e) => e.key === 'Enter' && router.push(`/page/${page.id}`)}
+          onClick={handleRowClick}
+          onKeyDown={handleRowKeyDown}
+          onDoubleClick={(e) => { e.stopPropagation(); setRenamingId(page.id) }}
           onMouseEnter={() => setHovered(true)}
           onMouseLeave={() => setHovered(false)}
           style={{ paddingLeft: `${12 + depth * 16}px` }}
@@ -111,11 +154,29 @@ export function PageItem({ page, depth, tree }: PageItemProps) {
           <span className="flex-shrink-0 text-base leading-none">
             {page.icon
               ? page.icon
-              : page.isDatabase
-                ? <Database size={14} className="text-gray-400 dark:text-sidebar-dark-muted" />
-                : <FileText size={14} className="text-gray-400 dark:text-sidebar-dark-muted" />}
+              : page.isFolder
+                ? <Folder size={14} className="text-gray-400 dark:text-sidebar-dark-muted" />
+                : page.isDatabase
+                  ? <Database size={14} className="text-gray-400 dark:text-sidebar-dark-muted" />
+                  : <FileText size={14} className="text-gray-400 dark:text-sidebar-dark-muted" />}
           </span>
-          <span className="flex-1 truncate">{page.title || 'Untitled'}</span>
+          {isRenaming ? (
+            <input
+              ref={renameInputRef}
+              value={renameValue}
+              onChange={(e) => setRenameValue(e.target.value)}
+              onClick={(e) => e.stopPropagation()}
+              onKeyDown={(e) => {
+                e.stopPropagation()
+                if (e.key === 'Enter') commitRename()
+                if (e.key === 'Escape') cancelRename()
+              }}
+              onBlur={commitRename}
+              className="flex-1 min-w-0 bg-white dark:bg-sidebar-dark-hover border border-blue-400 rounded-sm px-1 -mx-1 text-sm outline-none"
+            />
+          ) : (
+            <span className="flex-1 truncate">{page.title || 'Untitled'}</span>
+          )}
 
           {/* Action buttons (visible on hover) */}
           {hovered && (

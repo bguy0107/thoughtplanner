@@ -19,9 +19,16 @@ export function parseZoneId(id: string): { zone: DropZone; pageId: string } | nu
 interface SidebarDragState {
   overId: string | null
   invalidTargetIds: Set<string>
+  renamingId: string | null
+  setRenamingId: (id: string | null) => void
 }
 
-const defaultState: SidebarDragState = { overId: null, invalidTargetIds: new Set() }
+const defaultState: SidebarDragState = {
+  overId: null,
+  invalidTargetIds: new Set(),
+  renamingId: null,
+  setRenamingId: () => {},
+}
 
 export const SidebarDragContext = createContext<SidebarDragState>(defaultState)
 

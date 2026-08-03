@@ -24,6 +24,7 @@ export type PageSummary = {
   title: string
   icon: string | null
   isDatabase: boolean
+  isFolder: boolean
   position: number
   updatedAt: string
 }
@@ -186,7 +187,7 @@ export const api = {
       request<PageSummary[]>(`/api/pages${workspaceId ? `?workspaceId=${workspaceId}` : ''}`),
     get: (id: string) => request<Page>(`/api/pages/${id}`),
     getPublic: (id: string) => request<Pick<Page, 'id' | 'title' | 'icon' | 'coverImage' | 'content' | 'isPublic' | 'isDatabase'>>(`/api/public/${id}`),
-    create: (data: { workspaceId: string; parentPageId?: string; title?: string; icon?: string; isDatabase?: boolean }) =>
+    create: (data: { workspaceId: string; parentPageId?: string; title?: string; icon?: string; isDatabase?: boolean; isFolder?: boolean }) =>
       request<Page>('/api/pages', { method: 'POST', body: JSON.stringify(data) }),
     update: (id: string, data: Partial<Pick<Page, 'title' | 'icon' | 'coverImage' | 'content' | 'isArchived' | 'isPublic' | 'position' | 'parentPageId'>>) =>
       request<Page>(`/api/pages/${id}`, { method: 'PATCH', body: JSON.stringify(data) }),

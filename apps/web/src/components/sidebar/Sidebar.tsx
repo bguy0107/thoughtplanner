@@ -2,7 +2,7 @@
 
 import { useMemo, useRef, useState } from 'react'
 import { useRouter } from 'next/navigation'
-import { Plus, PanelLeftClose, Database, FileText, Search, Settings, FileSpreadsheet } from 'lucide-react'
+import { Plus, PanelLeftClose, Database, FileText, Folder, Search, Settings, FileSpreadsheet } from 'lucide-react'
 import {
   DndContext,
   DragOverlay,
@@ -29,7 +29,7 @@ import { useWorkspaceStore } from '@/store/workspace'
 export function Sidebar({ onClose }: { onClose?: () => void }) {
   const router = useRouter()
   const { data: session } = useSession()
-  const { addPage, addDatabase, toggleCollapsed, fetchPages, updatePage, setPages, expandPage } = useSidebarStore()
+  const { addPage, addDatabase, addFolder, toggleCollapsed, fetchPages, updatePage, setPages, expandPage } = useSidebarStore()
   const pages = useSidebarStore((s) => s.pages)
   const expandedIds = useSidebarStore((s) => s.expandedIds)
   const currentWorkspaceId = useWorkspaceStore((s) => s.currentWorkspaceId)
@@ -40,6 +40,7 @@ export function Sidebar({ onClose }: { onClose?: () => void }) {
   const [activeId, setActiveId] = useState<string | null>(null)
   const [overId, setOverId] = useState<string | null>(null)
   const [invalidTargetIds, setInvalidTargetIds] = useState<Set<string>>(new Set())
+  const [renamingId, setRenamingId] = useState<string | null>(null)
   const hoverExpandRef = useRef<{ id: string; timer: ReturnType<typeof setTimeout> } | null>(null)
   const snapshotRef = useRef<PageSummary[] | null>(null)
 
@@ -161,6 +162,12 @@ export function Sidebar({ onClose }: { onClose?: () => void }) {
     onClose?.()
   }
 
+  async function handleNewFolder() {
+    if (!currentWorkspaceId) return
+    const folder = await addFolder(currentWorkspaceId)
+    setRenamingId(folder.id)
+  }
+
   async function handleSignOut() {
     await signOut()
     router.push('/login')
@@ -206,7 +213,7 @@ export function Sidebar({ onClose }: { onClose?: () => void }) {
             onDragEnd={handleDragEnd}
             onDragCancel={handleDragCancel}
           >
-            <SidebarDragContext.Provider value={{ overId, invalidTargetIds }}>
+            <SidebarDragContext.Provider value={{ overId, invalidTargetIds, renamingId, setRenamingId }}>
               <PageTree parentId={null} depth={0} tree={tree} />
             </SidebarDragContext.Provider>
             <DragOverlay>
@@ -215,9 +222,11 @@ export function Sidebar({ onClose }: { onClose?: () => void }) {
                   <span className="flex-shrink-0 text-base leading-none">
                     {activePage.icon
                       ? activePage.icon
-                      : activePage.isDatabase
-                        ? <Database size={14} className="text-gray-400 dark:text-sidebar-dark-muted" />
-                        : <FileText size={14} className="text-gray-400 dark:text-sidebar-dark-muted" />}
+                      : activePage.isFolder
+                        ? <Folder size={14} className="text-gray-400 dark:text-sidebar-dark-muted" />
+                        : activePage.isDatabase
+                          ? <Database size={14} className="text-gray-400 dark:text-sidebar-dark-muted" />
+                          : <FileText size={14} className="text-gray-400 dark:text-sidebar-dark-muted" />}
                   </span>
                   <span className="truncate max-w-[160px]">{activePage.title || 'Untitled'}</span>
                 </div>
@@ -241,6 +250,13 @@ export function Sidebar({ onClose }: { onClose?: () => void }) {
           >
             <Database size={15} />
             New database
+          </button>
+          <button
+            onClick={handleNewFolder}
+            className="w-full flex items-center gap-2 px-3 py-1.5 text-sm text-gray-600 dark:text-sidebar-dark-text rounded hover:bg-[#ebebea] dark:hover:bg-sidebar-dark-hover transition-colors"
+          >
+            <Folder size={15} />
+            New folder
           </button>
           <button
             onClick={() => setSpreadsheetImportOpen(true)}

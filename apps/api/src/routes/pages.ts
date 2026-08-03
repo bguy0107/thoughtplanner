@@ -18,6 +18,7 @@ const CreatePageSchema = z.object({
   icon: z.string().optional(),
   position: z.number().optional(),
   isDatabase: z.boolean().default(false),
+  isFolder: z.boolean().default(false),
 })
 
 const UpdatePageSchema = z.object({
@@ -62,6 +63,7 @@ export async function pageRoutes(app: FastifyInstance) {
         title: true,
         icon: true,
         isDatabase: true,
+        isFolder: true,
         position: true,
         updatedAt: true,
       },

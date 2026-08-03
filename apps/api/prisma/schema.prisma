@@ -138,6 +138,7 @@ model Page {
   // Full TipTap JSON document stored as JSONB
   content      Json?
   isDatabase   Boolean  @default(false)
+  isFolder     Boolean  @default(false)
   isArchived   Boolean  @default(false)
   isPublic     Boolean  @default(false)
   // Fractional indexing for ordering siblings

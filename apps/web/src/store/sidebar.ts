@@ -10,6 +10,7 @@ interface SidebarStore {
   setPages: (pages: PageSummary[]) => void
   addPage: (workspaceId: string, parentPageId?: string) => Promise<PageSummary>
   addDatabase: (workspaceId: string, parentPageId?: string) => Promise<PageSummary>
+  addFolder: (workspaceId: string, parentPageId?: string) => Promise<PageSummary>
   updatePage: (id: string, data: Partial<PageSummary>) => void
   removePage: (id: string) => void
   toggleCollapsed: () => void
@@ -44,6 +45,12 @@ export const useSidebarStore = create<SidebarStore>((set, get) => ({
 
   addDatabase: async (workspaceId, parentPageId) => {
     const page = await api.pages.create({ workspaceId, parentPageId, title: 'Untitled', isDatabase: true })
+    set((s) => ({ pages: [...s.pages, page] }))
+    return page
+  },
+
+  addFolder: async (workspaceId, parentPageId) => {
+    const page = await api.pages.create({ workspaceId, parentPageId, title: 'New folder', isFolder: true })
     set((s) => ({ pages: [...s.pages, page] }))
     return page
   },
